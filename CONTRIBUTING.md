@@ -100,7 +100,7 @@ Start on a Wednesday so day 7 and day 14 are Nifty expiry Tuesdays. See [docs/CA
 | # | Task | Status |
 |---|---|---|
 | G2.1 | `participant_oi.py`: download and parse NSE participant OI (columns confirmed from a real file) | ✅ |
-| G2.2 | Download 12 months of participant OI | ❌ |
+| G2.2 | Download 12 months of participant OI | ✅ |
 | G2.3 | `instruments.py`: Nifty option contracts, lot size, tick size from the Upstox instrument master | ❌ |
 | G2.4 | `fetch_expired.py`: expired option and index candles, ≤ 1 month per request, coverage log | ❌ |
 | G2.5 | Run the expired fetch (needs Plus plan and a token) | ❌ |
