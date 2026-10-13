@@ -154,7 +154,7 @@ Start on a Wednesday so day 7 and day 14 are Nifty expiry Tuesdays. See [docs/CA
 
 | # | Task | Status |
 |---|---|---|
-| G6.1 | `validate_ticks.py`: tick-derived vs candle-derived GEX, flip and pin | ❌ |
+| G6.1 | `validate_ticks.py`: tick-derived vs candle-derived GEX, flip and pin | ✅ |
 | G6.2 | Run the validation on expiry 1 (after handoff H3), commit the report | ❌ |
 | G6.3 | Finalize the models (training set only) | ❌ |
 
