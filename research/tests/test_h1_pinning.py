@@ -54,6 +54,25 @@ def synthetic_index(expiry, f) -> pl.DataFrame:
     return pl.DataFrame({"ts": ts, "open": f, "high": f, "low": f, "close": f})
 
 
+def write_coverage(expired, flags: dict) -> None:
+    """coverage_summary.csv in fetch_expired's format (written through its upsert_csv)."""
+    import fetch_expired
+
+    for e, ok in flags.items():
+        row = {"expiry": e, "contracts": 42, "contracts_with_data": 42, "index_minutes": 375, "sessions": 1,
+               "expected_minutes": 375, "union_option_minutes": 375 if ok else 100, "coverage": 1.0 if ok else 0.27,
+               "complete": ok}
+        fetch_expired.upsert_csv(expired / "coverage_summary.csv", pl.DataFrame([row]), e)
+
+
+def write_prereg(path, train_fraction=0.7, last_train="TBD"):
+    path.write_text(
+        f'[split]\ntrain_fraction = {train_fraction}\nlast_train_expiry = "{last_train}"\n'
+        '[bootstrap]\nresamples = 10000\nblock_length = "TBD"\nseed = 20261013\n'
+        '[h1]\ndecision_time = "14:00"\n'
+    )
+
+
 @pytest.fixture
 def cache(tmp_path, monkeypatch):
     expired = tmp_path / "expired"
@@ -62,12 +81,9 @@ def cache(tmp_path, monkeypatch):
     for e, (f, cw, pw, _) in CASES.items():
         synthetic_options(e, f, cw, pw).write_parquet(gpdata.options_path(e))
         synthetic_index(e, f).write_parquet(gpdata.index_path(e))
+    write_coverage(expired, {e: True for e in CASES})
     toml = tmp_path / "prereg.toml"
-    toml.write_text(
-        '[split]\ntrain_fraction = 0.7\nlast_train_expiry = "TBD"\n'
-        '[bootstrap]\nresamples = 10000\nblock_length = "TBD"\nseed = 20261013\n'
-        '[h1]\ndecision_time = "14:00"\n'
-    )
+    write_prereg(toml)
     monkeypatch.setattr(prereg, "PATH", toml)
 
     no_weights = max(CASES)
@@ -184,8 +200,12 @@ def test_end_to_end_train(cache, capsys):
         else:
             assert row["expiry"] == max(CASES) and math.isnan(row["pin_S1"]) and math.isnan(row["pin_S2"])
 
+    assert table["coverage_complete"].to_list() == [True] * 3
+
     summary = json.loads((out / "h1_train_summary.json").read_text())
     assert summary["split"] == "train" and summary["block_length"] == 3 and summary["block_length_provisional"]
+    assert summary["include_incomplete"] is False
+    assert summary["coverage"]["n_cached"] == 3 and summary["coverage"]["n_excluded_incomplete"] == 0
     assert summary["resamples"] == 10_000 and summary["seed"] == 20261013
     assert summary["mae"]["pin_S0"]["n"] == 3 and summary["mae"]["pin_S1"]["n"] == 2
     want = np.mean([abs(c[3] - c[1]) for c in CASES.values()])
@@ -206,4 +226,50 @@ def test_test_split_refuses_tbd_even_when_tagged(cache, monkeypatch):
     monkeypatch.setattr(prereg, "git_tags", lambda pattern: "prereg-v1\n")
     with pytest.raises(SystemExit, match="TBD"):
         h1_pinning.main(["--split", "test", "--out", str(cache / "output")])
+    assert not (cache / "output").exists()
+
+
+def test_incomplete_expiries_excluded_before_split(cache):
+    e1, e2, e3 = sorted(CASES)
+    # e3 incomplete; a complete expiry that is not cached is ignored; train fraction 0.5
+    write_coverage(gpdata.EXPIRED, {e3: False, dt.date(2026, 10, 27): True})
+    write_prereg(cache / "prereg.toml", train_fraction=0.5)
+    out = cache / "output"
+    h1_pinning.main(["--split", "train", "--out", str(out)])
+    table = pl.read_csv(out / "h1_train.csv", try_parse_dates=True)
+    # split over the kept sample [e1, e2]: ceil(0.5 * 2) = 1 expiry. Over all three it would be [e1, e2].
+    assert table["expiry"].to_list() == [e1]
+    summary = json.loads((out / "h1_train_summary.json").read_text())
+    assert summary["expiries"] == [e1.isoformat()]
+    cov = summary["coverage"]
+    assert cov["n_cached"] == 3 and cov["n_kept"] == 2 and cov["n_excluded_incomplete"] == 1
+    assert cov["incomplete_expiries"] == [e3.isoformat()] and cov["n_split_incomplete"] == 0
+
+
+def test_include_incomplete_train_diagnostics(cache, capsys):
+    e1, e2, e3 = sorted(CASES)
+    write_coverage(gpdata.EXPIRED, {e2: False})
+    out = cache / "output"
+    h1_pinning.main(["--split", "train", "--out", str(out), "--include-incomplete"])
+    assert "coverage check" in capsys.readouterr().err
+    table = pl.read_csv(out / "h1_train.csv", try_parse_dates=True)
+    assert table["expiry"].to_list() == [e1, e2, e3]
+    assert table["coverage_complete"].to_list() == [True, False, True]
+    summary = json.loads((out / "h1_train_summary.json").read_text())
+    assert summary["include_incomplete"] is True
+    assert summary["coverage"]["n_excluded_incomplete"] == 0 and summary["coverage"]["n_split_incomplete"] == 1
+
+
+def test_missing_coverage_summary_refuses(cache):
+    (gpdata.EXPIRED / "coverage_summary.csv").unlink()
+    with pytest.raises(SystemExit, match="coverage_summary.csv not found"):
+        h1_pinning.main(["--split", "train", "--out", str(cache / "output")])
+    assert not (cache / "output").exists()
+
+
+def test_include_incomplete_refused_for_test_split(cache, monkeypatch):
+    monkeypatch.setattr(prereg, "git_tags", lambda pattern: "prereg-v1\n")
+    write_prereg(cache / "prereg.toml", last_train=min(CASES).isoformat())
+    with pytest.raises(SystemExit, match="refused for --split test"):
+        h1_pinning.main(["--split", "test", "--out", str(cache / "output"), "--include-incomplete"])
     assert not (cache / "output").exists()

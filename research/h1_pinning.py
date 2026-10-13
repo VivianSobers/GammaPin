@@ -6,6 +6,10 @@ Per expiry, `features` sees only the candle chain as of the decision time (gpdat
 inputs known before it. The settlement enters only through `target` and `abs_errors`, after the
 features are fixed.
 
+Sample: cached expiries flagged `complete` in coverage_summary.csv (gpdata.complete_expiries), split
+chronologically by prereg.expiries_for over that kept sample. `--include-incomplete` keeps every cached
+expiry for train diagnostics only; it is refused for the test split.
+
 Outputs: output/h1_{split}.csv (one row per expiry) and output/h1_{split}_summary.json.
 """
 
@@ -100,6 +104,26 @@ def trading_days(expiries: list[dt.date]) -> list[dt.date]:
 def available_expiries() -> list[dt.date]:
     """Expiries with a cached options file. Only file names are read, not data."""
     return sorted(dt.date.fromisoformat(p.stem.removeprefix("options_")) for p in gpdata.EXPIRED.glob("options_*.parquet"))
+
+
+def coverage_filter(expiries: list[dt.date], include_incomplete: bool = False) -> tuple[list[dt.date], list[dt.date]]:
+    """(kept, incomplete): `incomplete` lists the expiries not flagged complete in coverage_summary.csv.
+
+    `kept` is the complete expiries, or every expiry with `include_incomplete` (diagnostics only).
+    Without a coverage_summary.csv no expiry passes the check, so the run stops unless `include_incomplete`.
+    """
+    path = gpdata.coverage_summary_path()
+    if not path.exists():
+        msg = f"{path} not found, so no expiry passes the coverage check. Run fetch_expired.py to write it"
+        if not include_incomplete:
+            raise SystemExit(msg + " (or pass --include-incomplete for train diagnostics).")
+        prereg.warn(msg + "; --include-incomplete keeps every expiry.")
+    complete = gpdata.complete_expiries(path)
+    days = sorted(set(expiries))
+    incomplete = [e for e in days if e not in complete]
+    if incomplete and include_incomplete:
+        prereg.warn(f"--include-incomplete keeps {len(incomplete)} expiries that fail the coverage check")
+    return (days if include_incomplete else [e for e in days if e in complete]), incomplete
 
 
 def run_expiry(
@@ -202,14 +226,23 @@ def main(argv: list[str] | None = None) -> None:
     p = argparse.ArgumentParser(description="H1 pinning: GEX pin vs baselines at the expiry-day decision time.")
     p.add_argument("--split", choices=prereg.SPLITS, required=True)
     p.add_argument("--out", type=Path, default=OUTPUT)
+    p.add_argument("--include-incomplete", action="store_true",
+                   help="diagnostics only: keep expiries that fail the coverage check (refused for --split test)")
     args = p.parse_args(argv)
+    if args.include_incomplete and args.split == "test":
+        raise SystemExit("--include-incomplete is for train diagnostics only and is refused for --split test.")
     if args.split == "test":
         prereg.require_frozen()
     cfg = prereg.load()
-    expiries = prereg.expiries_for(args.split, available_expiries(), cfg)
+    available = available_expiries()
+    kept, incomplete = coverage_filter(available, args.include_incomplete)
+    expiries = prereg.expiries_for(args.split, kept, cfg)
     block_length = prereg.block_length(args.split, cfg)
     if not expiries:
-        raise SystemExit(f"No {args.split} expiries in {gpdata.EXPIRED}")
+        raise SystemExit(
+            f"No {args.split} expiries in {gpdata.EXPIRED} "
+            f"({len(available)} cached, {len(available) - len(kept)} excluded as incomplete)"
+        )
 
     import participant_oi
     import rates
@@ -222,10 +255,20 @@ def main(argv: list[str] | None = None) -> None:
         lambda d: participant_oi.weights_for(d, poi),
         lambda d: rates.rate_on(d, rate_df),
         settlements.load(),
-    )
+    ).with_columns(coverage_complete=~pl.col("expiry").is_in(pl.Series(incomplete, dtype=pl.Date).implode()))
     summary = {
         "split": args.split,
         "expiries": expiries,
+        "include_incomplete": args.include_incomplete,
+        "coverage": {
+            "n_cached": len(available),
+            "n_incomplete": len(incomplete),
+            "n_excluded_incomplete": len(available) - len(kept),
+            "incomplete_expiries": incomplete,
+            "n_kept": len(kept),
+            "n_split": len(expiries),
+            "n_split_incomplete": len(set(expiries) & set(incomplete)),
+        },
         "decision_time": prereg.decision_time(cfg),
         "block_length": block_length,
         "block_length_provisional": prereg.is_tbd(cfg["bootstrap"]["block_length"]),

@@ -264,40 +264,155 @@ def test_gex_snapshot_matches_analyze_at():
 # --- CLI ---------------------------------------------------------------------------------------
 
 
-# The fixture is tiny: S1/S2 flips are almost always None, so flip_dist and flip_none are collinear there.
-@pytest.mark.filterwarnings("ignore:The design matrix is rank-deficient")
-def test_main_train_writes_outputs(tmp_path, monkeypatch):
-    expiries = [dt.date(2026, 9, 8), dt.date(2026, 9, 15), dt.date(2026, 9, 22)]
-    days = [d for e in expiries for d in (e - dt.timedelta(days=1), e)]
-    (tmp_path / "cache").mkdir()
-    for i, e in enumerate(expiries):
+EXPIRIES = [dt.date(2026, 9, 8), dt.date(2026, 9, 15), dt.date(2026, 9, 22), dt.date(2026, 9, 29)]
+
+
+def write_coverage(expired, flags: dict) -> None:
+    """coverage_summary.csv in fetch_expired's format (written through its upsert_csv)."""
+    import fetch_expired
+
+    for e, ok in flags.items():
+        row = {"expiry": e, "contracts": 22, "contracts_with_data": 22, "index_minutes": 120, "sessions": 2,
+               "expected_minutes": 750, "union_option_minutes": 750 if ok else 60, "coverage": 1.0 if ok else 0.08,
+               "complete": ok}
+        fetch_expired.upsert_csv(expired / "coverage_summary.csv", pl.DataFrame([row]), e)
+
+
+def write_prereg(path, last_train="TBD", train_fraction=0.7):
+    path.write_text(
+        f'[split]\ntrain_fraction = {train_fraction}\nlast_train_expiry = "{last_train}"\n'
+        '[bootstrap]\nresamples = 10000\nblock_length = "TBD"\nseed = 20261013\n'
+        '[h1]\ndecision_time = "14:00"\n'
+    )
+
+
+@pytest.fixture
+def cli(tmp_path, monkeypatch):
+    """Cache of len(EXPIRIES) small expiry weeks (all complete), real prereg on a temp toml, no git tag."""
+    import prereg
+
+    days = [d for e in EXPIRIES for d in (e - dt.timedelta(days=1), e)]
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    for i, e in enumerate(EXPIRIES):
         mine = [e - dt.timedelta(days=1), e]
         sig = {d: np.full(12, 7e-4) * (1 + 0.3 * j) for j, d in enumerate(mine)}
-        synthetic_index(sig, seed=i).write_parquet(tmp_path / "cache" / f"index_{e}.parquet")
-        synthetic_chain(mine, e, days, minutes=60, seed=i).write_parquet(tmp_path / "cache" / f"options_{e}.parquet")
-    monkeypatch.setattr(gpdata, "EXPIRED", tmp_path / "cache")
+        synthetic_index(sig, seed=i).write_parquet(cache / f"index_{e}.parquet")
+        synthetic_chain(mine, e, days, minutes=60, seed=i).write_parquet(cache / f"options_{e}.parquet")
+    write_coverage(cache, {e: True for e in EXPIRIES})
+    monkeypatch.setattr(gpdata, "EXPIRED", cache)
     monkeypatch.setattr(h2_vol, "HAR_WINDOWS", (2, 3))
-
-    def not_frozen():
-        raise SystemExit("not frozen")
-
+    toml = tmp_path / "prereg.toml"
+    write_prereg(toml, last_train="2026-09-22")
+    monkeypatch.setattr(prereg, "PATH", toml)
+    monkeypatch.setattr(prereg, "git_tags", lambda pattern: "")
     fake = {
-        "prereg": types.SimpleNamespace(split=lambda xs: (sorted(xs)[:2], sorted(xs)[2:]), require_frozen=not_frozen),
         "rates": types.SimpleNamespace(load=lambda: None, rate_on=lambda d, df: R),
         "participant_oi": types.SimpleNamespace(load=lambda: None, weights_for=lambda d, df: WEIGHTS),
     }
     for name, mod in fake.items():
         monkeypatch.setitem(sys.modules, name, mod)
+    return types.SimpleNamespace(root=tmp_path, cache=cache, toml=toml, out=tmp_path / "out", prereg=prereg)
 
-    monkeypatch.setattr(sys, "argv", ["h2_vol", "--split", "train", "--out", str(tmp_path / "out")])
-    h2_vol.main()
-    report = json.loads((tmp_path / "out" / "h2_train.json").read_text())
-    assert report["expiries"]["train"] == ["2026-09-08", "2026-09-15"]
+
+def tagged(pattern):
+    return "prereg-v1\n"
+
+
+def run_h2(cli, split, *extra):
+    h2_vol.main(["--split", split, "--out", str(cli.out), *extra])
+    report = json.loads((cli.out / f"h2_{split}.json").read_text())
+    return report, pl.read_parquet(cli.out / f"h2_{split}_features.parquet")
+
+
+# The fixture is tiny: S1/S2 flips are almost always None, so flip_dist and flip_none are collinear there.
+pytestmark_rank = pytest.mark.filterwarnings("ignore:The design matrix is rank-deficient")
+
+
+@pytestmark_rank
+def test_main_train_writes_outputs(cli):
+    report, table = run_h2(cli, "train")
+    assert report["expiries"]["train"] == ["2026-09-08", "2026-09-15", "2026-09-22"]
+    assert report["expiries"]["test"] == ["2026-09-29"]
+    assert report["split_provisional"] is False and report["include_incomplete"] is False
+    assert report["coverage"]["n_cached"] == 4 and report["coverage"]["n_excluded_incomplete"] == 0
     assert {"S0", "S1", "S2", "standardization"} <= set(report["in_sample"])
     assert report["pseudo_oos"] is not None and "oos" in report["pseudo_oos"]["S0"]
-    table = pl.read_parquet(tmp_path / "out" / "h2_train_features.parquet")
-    assert set(table["expiry"].unique()) == set(expiries[:2]) and "gex_z_S2" in table.columns
+    assert set(table["expiry"].unique()) == set(EXPIRIES[:3]) and "gex_z_S2" in table.columns
+    assert table["coverage_complete"].all()
 
-    monkeypatch.setattr(sys, "argv", ["h2_vol", "--split", "test", "--out", str(tmp_path / "out")])
     with pytest.raises(SystemExit, match="not frozen"):
-        h2_vol.main()
+        h2_vol.main(["--split", "test", "--out", str(cli.out)])
+
+
+@pytestmark_rank
+def test_main_test_split_when_frozen(cli, monkeypatch):
+    monkeypatch.setattr(cli.prereg, "git_tags", tagged)
+    report, table = run_h2(cli, "test")
+    assert report["expiries"] == {"train": ["2026-09-08", "2026-09-15", "2026-09-22"], "test": ["2026-09-29"]}
+    assert "oos" in report["test"]["S0"]
+    assert set(table.filter(pl.col("sample") == "test")["expiry"].unique()) == {EXPIRIES[3]}
+
+
+def test_test_split_refuses_while_tbd_even_when_tagged(cli, monkeypatch):
+    write_prereg(cli.toml, last_train="TBD")
+    monkeypatch.setattr(cli.prereg, "git_tags", tagged)
+    with pytest.raises(SystemExit, match="last_train_expiry is TBD"):
+        h2_vol.main(["--split", "test", "--out", str(cli.out)])
+    assert not cli.out.exists()
+
+
+def test_test_split_requires_tag(cli):
+    with pytest.raises(SystemExit, match="not frozen"):
+        h2_vol.main(["--split", "test", "--out", str(cli.out)])
+    assert not cli.out.exists()
+
+
+@pytestmark_rank
+def test_train_split_provisional_while_tbd(cli, capsys):
+    write_prereg(cli.toml, last_train="TBD")
+    report, _ = run_h2(cli, "train")
+    assert "provisional" in capsys.readouterr().err
+    # ceil(0.7 * 4) = 3
+    assert report["expiries"]["train"] == ["2026-09-08", "2026-09-15", "2026-09-22"]
+    assert report["split_provisional"] is True
+
+
+@pytestmark_rank
+def test_incomplete_expiries_excluded_before_split(cli):
+    write_prereg(cli.toml, last_train="TBD", train_fraction=0.5)
+    write_coverage(cli.cache, {EXPIRIES[0]: False, dt.date(2026, 10, 6): True})
+    report, table = run_h2(cli, "train")
+    # kept [09-15, 09-22, 09-29]: train = ceil(0.5 * 3) = 2. Splitting all four first would give [09-15] only.
+    assert report["expiries"]["train"] == ["2026-09-15", "2026-09-22"]
+    assert report["expiries"]["test"] == ["2026-09-29"]
+    cov = report["coverage"]
+    assert cov["n_cached"] == 4 and cov["n_kept"] == 3 and cov["n_excluded_incomplete"] == 1
+    assert cov["incomplete_expiries"] == ["2026-09-08"] and cov["n_used_incomplete"] == 0
+    assert set(table["expiry"].unique()) == set(EXPIRIES[1:3])
+
+
+@pytestmark_rank
+def test_include_incomplete_train_diagnostics(cli, capsys):
+    write_coverage(cli.cache, {EXPIRIES[1]: False})
+    report, table = run_h2(cli, "train", "--include-incomplete")
+    assert "coverage check" in capsys.readouterr().err
+    assert report["include_incomplete"] is True
+    assert report["expiries"]["train"] == ["2026-09-08", "2026-09-15", "2026-09-22"]
+    assert report["coverage"]["n_used_incomplete"] == 1 and report["coverage"]["n_excluded_incomplete"] == 0
+    flags = dict(table.group_by("expiry").agg(pl.col("coverage_complete").all()).iter_rows())
+    assert flags == {EXPIRIES[0]: True, EXPIRIES[1]: False, EXPIRIES[2]: True}
+
+
+def test_include_incomplete_refused_for_test_split(cli, monkeypatch):
+    monkeypatch.setattr(cli.prereg, "git_tags", tagged)
+    with pytest.raises(SystemExit, match="refused for --split test"):
+        h2_vol.main(["--split", "test", "--out", str(cli.out), "--include-incomplete"])
+    assert not cli.out.exists()
+
+
+def test_missing_coverage_summary_refuses(cli):
+    (cli.cache / "coverage_summary.csv").unlink()
+    with pytest.raises(SystemExit, match="coverage_summary.csv not found"):
+        h2_vol.main(["--split", "train", "--out", str(cli.out)])
+    assert not cli.out.exists()

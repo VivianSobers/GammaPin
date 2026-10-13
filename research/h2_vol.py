@@ -29,8 +29,12 @@ conventions. Columns with no variation in the training rows are dropped from bot
 R2_oos = 1 - SSE_model / SSE_baseline on the evaluation rows. Train mode also reports a pseudo out-of-sample
 run: the first 70% of training expiries (chronological) fit, the last 30% evaluate, standardized on the first part.
 
-Expiry week: sessions from expiry - 6 days to expiry, starting after the previous expiry when that is later,
-each analyzed with that expiry's chain through gpdata.analyze_at at bar_end(t).
+Expiry week: sessions from expiry - 6 days to expiry, starting after the previous cached expiry when that
+is later, each analyzed with that expiry's chain through gpdata.analyze_at at bar_end(t).
+
+Sample: cached expiries flagged `complete` in coverage_summary.csv (gpdata.complete_expiries), split by
+prereg.expiries_for over that kept sample (the test split refuses while last_train_expiry is TBD and needs
+the prereg-v1 tag). `--include-incomplete` keeps every cached expiry for train diagnostics only.
 """
 
 from __future__ import annotations
@@ -302,6 +306,28 @@ def available_expiries() -> list[dt.date]:
     return out
 
 
+def coverage_filter(expiries: list[dt.date], include_incomplete: bool = False) -> tuple[list[dt.date], list[dt.date]]:
+    """(kept, incomplete): `incomplete` lists the expiries not flagged complete in coverage_summary.csv.
+
+    `kept` is the complete expiries, or every expiry with `include_incomplete` (diagnostics only).
+    Without a coverage_summary.csv no expiry passes the check, so the run stops unless `include_incomplete`.
+    """
+    import prereg
+
+    path = gpdata.coverage_summary_path()
+    if not path.exists():
+        msg = f"{path} not found, so no expiry passes the coverage check. Run fetch_expired.py to write it"
+        if not include_incomplete:
+            raise SystemExit(msg + " (or pass --include-incomplete for train diagnostics).")
+        prereg.warn(msg + "; --include-incomplete keeps every expiry.")
+    complete = gpdata.complete_expiries(path)
+    days = sorted(set(expiries))
+    incomplete = [e for e in days if e not in complete]
+    if incomplete and include_incomplete:
+        prereg.warn(f"--include-incomplete keeps {len(incomplete)} expiries that fail the coverage check")
+    return (days if include_incomplete else [e for e in days if e in complete]), incomplete
+
+
 def load_index(expiries: list[dt.date]) -> pl.DataFrame:
     frames = [
         pl.read_parquet(gpdata.index_path(e)).select(pl.col("ts").cast(pl.Datetime("ms")), "open", "close")
@@ -325,23 +351,37 @@ SPEC = {
 }
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
     import participant_oi
     import prereg
     import rates
 
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--split", choices=["train", "test"], default="train")
+    ap.add_argument("--split", choices=prereg.SPLITS, default="train")
     ap.add_argument("--out", type=Path, default=OUTPUT)
-    args = ap.parse_args()
+    ap.add_argument("--include-incomplete", action="store_true",
+                    help="diagnostics only: keep expiries that fail the coverage check (refused for --split test)")
+    args = ap.parse_args(argv)
 
+    if args.include_incomplete and args.split == "test":
+        raise SystemExit("--include-incomplete is for train diagnostics only and is refused for --split test.")
     if args.split == "test":
         prereg.require_frozen()
+    cfg = prereg.load()
     all_expiries = available_expiries()
     if not all_expiries:
         raise SystemExit(f"no expiries with options and index candles in {gpdata.EXPIRED}")
-    train_exp, test_exp = (sorted(x) for x in prereg.split(all_expiries))
-    use = train_exp if args.split == "train" else sorted(train_exp + test_exp)
+    kept, incomplete = coverage_filter(all_expiries, args.include_incomplete)
+    # Same rules as H1: the test split refuses while last_train_expiry is TBD (checked before any train warning).
+    test_exp = prereg.expiries_for("test", kept, cfg) if args.split == "test" else []
+    train_exp = sorted(prereg.expiries_for("train", kept, cfg))
+    if not train_exp or (args.split == "test" and not test_exp):
+        raise SystemExit(
+            f"no {args.split} expiries in {gpdata.EXPIRED} "
+            f"({len(all_expiries)} cached, {len(all_expiries) - len(kept)} excluded as incomplete)"
+        )
+    held_out = [e for e in kept if e not in train_exp] if args.split == "train" else sorted(test_exp)
+    use = train_exp if args.split == "train" else sorted(train_exp + held_out)
 
     index = load_index(use)
     trading_days = sorted(set(index["ts"].dt.date().to_list()))
@@ -370,8 +410,21 @@ def main() -> None:
 
     feats = pl.concat(frames)
     train = feats.filter(pl.col("expiry").is_in(train_exp))
-    report: dict = {"split": args.split, "spec": SPEC, "skipped_days": skipped,
-                    "expiries": {"train": [str(x) for x in train_exp], "test": [str(x) for x in test_exp]}}
+    report: dict = {
+        "split": args.split, "spec": SPEC, "skipped_days": skipped,
+        "expiries": {"train": [str(x) for x in train_exp], "test": [str(x) for x in held_out]},
+        "split_provisional": prereg.is_tbd(cfg["split"]["last_train_expiry"]),
+        "include_incomplete": args.include_incomplete,
+        "coverage": {
+            "n_cached": len(all_expiries),
+            "n_incomplete": len(incomplete),
+            "n_excluded_incomplete": len(all_expiries) - len(kept),
+            "incomplete_expiries": [str(x) for x in incomplete],
+            "n_kept": len(kept),
+            "n_used": len(use),
+            "n_used_incomplete": len(set(use) & set(incomplete)),
+        },
+    }
     if args.split == "train":
         report["in_sample"] = result = evaluate(train, None)
         inner = inner_split(train.filter(pl.col("y").is_not_null()))
@@ -381,7 +434,9 @@ def main() -> None:
         test = feats.filter(pl.col("expiry").is_in(test_exp))
         report["test"] = result = evaluate(train, test)
         table = pl.concat([train.with_columns(sample=pl.lit("train")), test.with_columns(sample=pl.lit("test"))])
-    table = apply_z(table, result["standardization"])
+    table = apply_z(table, result["standardization"]).with_columns(
+        coverage_complete=~pl.col("expiry").is_in(pl.Series(incomplete, dtype=pl.Date).implode())
+    )
 
     args.out.mkdir(parents=True, exist_ok=True)
     (args.out / f"h2_{args.split}.json").write_text(json.dumps(report, indent=2, default=str))

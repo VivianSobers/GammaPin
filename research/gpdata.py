@@ -11,6 +11,9 @@ Options candles (`research/cache/expired/options_{expiry}.parquet`), written by 
     lot_size      i64
 
 Index candles (`research/cache/expired/index_{expiry}.parquet`): ts, open, high, low, close.
+
+Coverage (`research/cache/expired/coverage_summary.csv`, one row per expiry): `complete_expiries` reads
+its `complete` flag. Only complete expiries enter the H1 and H2 samples (PREREGISTRATION "Kept contracts").
 """
 
 from __future__ import annotations
@@ -35,6 +38,26 @@ def options_path(expiry: dt.date) -> Path:
 
 def index_path(expiry: dt.date) -> Path:
     return EXPIRED / f"index_{expiry.isoformat()}.parquet"
+
+
+def coverage_summary_path() -> Path:
+    return EXPIRED / "coverage_summary.csv"
+
+
+def complete_expiries(summary_path: Path | None = None) -> set[dt.date]:
+    """Expiries flagged `complete` in fetch_expired.py's coverage_summary.csv (default: in EXPIRED).
+
+    A missing file gives an empty set; the caller decides how to report that. Expiries absent from
+    the file are not complete.
+    """
+    path = coverage_summary_path() if summary_path is None else Path(summary_path)
+    if not path.exists():
+        return set()
+    df = pl.read_csv(path, infer_schema=False)
+    if df.height == 0:
+        return set()
+    flag = pl.col("complete").str.strip_chars().str.to_lowercase().is_in(["true", "1"])
+    return {dt.date.fromisoformat(s) for s in df.filter(flag)["expiry"].str.strip_chars().to_list()}
 
 
 def known_at(df: pl.DataFrame, ts: dt.datetime) -> pl.DataFrame:
