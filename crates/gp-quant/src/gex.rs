@@ -9,6 +9,8 @@ use crate::norm::n_pdf;
 pub const FLIP_HALF_WIDTH: f64 = 0.03;
 /// ... in 0.05% steps.
 pub const FLIP_STEP: f64 = 0.0005;
+/// Strikes contribute nothing measurable once |d1| exceeds this (φ(8) ≈ 5e-15).
+const D1_CUTOFF: f64 = 8.0;
 
 /// GEX per strike, aligned with `rows`.
 pub fn gex_by_strike(rows: &[StrikeRow], gamma: &[f64], w: Weights, lot: f64, f: f64) -> Vec<f64> {
@@ -47,22 +49,29 @@ impl GammaGrid {
                 (row.strike.ln(), v, 0.5 * v * v)
             })
             .collect();
-        let (mut call, mut put) = (
-            Vec::with_capacity(levels.len()),
-            Vec::with_capacity(levels.len()),
-        );
-        for &x in &levels {
-            let ln_x = x.ln();
-            let (mut c, mut p) = (0.0, 0.0);
-            for (row, &(ln_k, v, half_v2)) in rows.iter().zip(&pre) {
-                let g = n_pdf((ln_x - ln_k + half_v2) / v) / v;
-                c += g * row.call.oi;
-                p += g * row.put.oi;
+        let ln_levels: Vec<f64> = levels.iter().map(|x| x.ln()).collect();
+        let (mut call, mut put) = (vec![0.0; levels.len()], vec![0.0; levels.len()]);
+        for (row, &(ln_k, v, half_v2)) in rows.iter().zip(&pre) {
+            if row.call.oi == 0.0 && row.put.oi == 0.0 {
+                continue;
             }
+            // φ(d1) is negligible beyond |d1| = D1_CUTOFF; ln levels ascend, so the
+            // levels this strike touches form one contiguous run.
+            let lo = ln_k - half_v2 - D1_CUTOFF * v;
+            let hi = ln_k - half_v2 + D1_CUTOFF * v;
+            let start = ln_levels.partition_point(|&l| l < lo);
+            let end = ln_levels.partition_point(|&l| l <= hi);
+            for i in start..end {
+                let g = n_pdf((ln_levels[i] - ln_k + half_v2) / v) / v;
+                call[i] += g * row.call.oi;
+                put[i] += g * row.put.oi;
+            }
+        }
+        for (i, &x) in levels.iter().enumerate() {
             // Γ = e^{-rT} φ(d1) / (x v); times lot·x²·0.01 leaves one x
             let scale = df * lot * x * 0.01;
-            call.push(c * scale);
-            put.push(p * scale);
+            call[i] *= scale;
+            put[i] *= scale;
         }
         Self { levels, call, put }
     }

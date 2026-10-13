@@ -1,15 +1,18 @@
 //! Standard normal CDF and PDF.
 
-use std::f64::consts::{FRAC_1_SQRT_2, PI};
+use std::f64::consts::FRAC_1_SQRT_2;
+
+/// 1/√(2π).
+const INV_SQRT_2PI: f64 = 0.398_942_280_401_432_7;
 
 /// N(x), via erfc so the tails keep full relative precision.
 pub fn n_cdf(x: f64) -> f64 {
     0.5 * libm::erfc(-x * FRAC_1_SQRT_2)
 }
 
-/// φ(x).
+/// φ(x). Uses libm's exp, which is faster than some platform C runtimes in the GEX hot loop.
 pub fn n_pdf(x: f64) -> f64 {
-    (-0.5 * x * x).exp() / (2.0 * PI).sqrt()
+    INV_SQRT_2PI * libm::exp(-0.5 * x * x)
 }
 
 #[cfg(test)]

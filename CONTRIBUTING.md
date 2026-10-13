@@ -121,9 +121,9 @@ Start on a Wednesday so day 7 and day 14 are Nifty expiry Tuesdays. See [docs/CA
 | G3.4 | Sign conventions S0, S1, S2 from participant OI | ✅ |
 | G3.5 | `analyze()`: forward, GEX, flip, pin and regime per convention (C3) | ✅ |
 | G3.6 | Python bindings for `analyze()` and the S1/S2 weights | ✅ |
-| G3.7 | `criterion` bench: 1,500-contract chain < 5 ms on one core | ❌ |
+| G3.7 | `criterion` bench: 1,500-contract chain < 5 ms on one core | ✅ |
 
-**🚩 CP-G3:** `analyze()` matches C3 and the bench is under 5 ms (handoff H2). ❌
+**🚩 CP-G3:** `analyze()` matches C3 and the bench is under 5 ms (handoff H2). ✅
 
 ## G4: Research pipelines (days 6–7, training data only) · `research/`
 
@@ -279,7 +279,7 @@ Start on a Wednesday so day 7 and day 14 are Nifty expiry Tuesdays. See [docs/CA
 |---|---|---|---|
 | Data loss when one node fails | 0 frames (60 s network cut) | Vivian | ❌ |
 | Capture throughput per node | ≥ 50k msg/s sustained | Vivian | ❌ |
-| Full-chain recompute (≤ 1,500 contracts) | < 5 ms on one core | Guru | ❌ |
+| Full-chain recompute (≤ 1,500 contracts) | < 5 ms on one core | Guru | ✅ (2.4 ms) |
 | Feed-to-dashboard latency | p99 < 250 ms | Vivian | ❌ |
 | Replay speed | ≥ 1M events/s | Vivian | ❌ |
 | Replay determinism | SHA-256 identical across runs | Vivian | ❌ |
