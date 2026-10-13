@@ -5,6 +5,7 @@ pub mod black76;
 pub mod chain;
 pub mod filter;
 pub mod forward;
+pub mod gex;
 pub mod iv;
 pub mod norm;
 pub mod time;
