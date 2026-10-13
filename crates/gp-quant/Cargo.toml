@@ -1,0 +1,18 @@
+[package]
+name = "gp-quant"
+description = "Black-76, implied vol, gamma and GEX; one library for live and research"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+name = "gp_quant"
+crate-type = ["cdylib", "rlib"]
+
+[features]
+# Build the Python module with `maturin develop` (see pyproject.toml).
+python = ["dep:pyo3", "dep:numpy"]
+
+[dependencies]
+pyo3 = { workspace = true, optional = true }
+numpy = { workspace = true, optional = true }

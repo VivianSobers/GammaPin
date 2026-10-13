@@ -1,0 +1,26 @@
+# Copy to config/gammapin.toml (git-ignored) or /etc/gammapin/gammapin.toml.
+
+[node]
+name = "A"                  # A | B | C
+data_dir = "data"           # data/{node}/{date}/seg-{n}.gpl
+
+[upstox]
+token_file = "/etc/gammapin/upstox.token"   # written by `gp auth`, watched by gp-capture
+instrument_master_url = "https://assets.upstox.com/market-quote/instruments/exchange/complete.json.gz"
+
+[capture]
+window_ist = ["09:00", "15:40"]
+token_alert_ist = "09:05"
+segment_mib = 64
+flush_ms = 100
+backoff_ms = [100, 5000]
+strike_band_pct = 10        # +/- around the forward
+expiries = 2                # current + next Nifty weekly
+
+[merge]
+nodes = ["A", "B"]
+inbox = "/srv/gammapin/inbox"   # Node A/B segments land here (rsync over LAN)
+
+[monitor]
+bind = "0.0.0.0:8080"
+snapshot_ms = 1000

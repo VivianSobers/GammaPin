@@ -1,0 +1,9 @@
+[Unit]
+Description=Start GammaPin capture before the 09:00 IST window
+
+[Timer]
+OnCalendar=Mon..Fri 08:55 Asia/Kolkata
+Persistent=true
+
+[Install]
+WantedBy=timers.target

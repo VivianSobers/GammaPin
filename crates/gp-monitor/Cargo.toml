@@ -1,0 +1,10 @@
+[package]
+name = "gp-monitor"
+description = "Live engine and one-page dashboard served over WebSocket"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+gp-replay.workspace = true
+gp-quant.workspace = true

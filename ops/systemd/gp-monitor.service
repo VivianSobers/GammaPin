@@ -1,0 +1,14 @@
+[Unit]
+Description=GammaPin live monitor (Node C)
+After=network-online.target
+
+[Service]
+Type=simple
+User=gammapin
+WorkingDirectory=/opt/gammapin
+ExecStart=/opt/gammapin/bin/gp-monitor --config /etc/gammapin/gammapin.toml
+Restart=on-failure
+Environment=RUST_LOG=info
+
+[Install]
+WantedBy=multi-user.target

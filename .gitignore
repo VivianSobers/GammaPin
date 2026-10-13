@@ -1,0 +1,32 @@
+# Rust
+/target/
+**/*.rs.bk
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.hypothesis/
+*.egg-info/
+*.so
+*.pyd
+
+# Captured market data: never commit raw ticks (NSE licensing)
+/data/
+*.gpl
+*.gpl.zst
+*.parquet
+research/cache/
+research/output/
+
+# Secrets
+*.token
+.env
+config/gammapin.toml
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

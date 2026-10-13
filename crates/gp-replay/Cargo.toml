@@ -1,0 +1,9 @@
+[package]
+name = "gp-replay"
+description = "Deterministic replay behind the same stream interface as the live feed"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+gp-log.workspace = true

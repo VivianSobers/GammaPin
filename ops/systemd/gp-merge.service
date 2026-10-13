@@ -1,0 +1,9 @@
+[Unit]
+Description=GammaPin merge + compress (Node C, after close)
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=gammapin
+WorkingDirectory=/opt/gammapin
+ExecStart=/opt/gammapin/bin/gp-merge --config /etc/gammapin/gammapin.toml --date today

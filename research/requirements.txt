@@ -1,0 +1,10 @@
+polars>=1.0
+numpy>=2.0
+scipy>=1.13
+statsmodels>=0.14
+duckdb>=1.0
+matplotlib>=3.9
+requests>=2.32
+pytest>=8.0
+hypothesis>=6.100
+py_vollib>=1.0
