@@ -19,14 +19,21 @@ def ts_ms(h, m, s=0, day=EXPIRY):
 def snapshot_file(tmp_path, **changes) -> Path:
     """The C2 mock, with `ts_ms` moved to 14:00 IST on its own expiry day unless overridden."""
     snap = json.loads(MOCK.read_text(encoding="utf-8")) | {"ts_ms": ts_ms(14, 0, 3)} | changes
+    tmp_path.mkdir(parents=True, exist_ok=True)
     path = tmp_path / "snap.json"
     path.write_text(json.dumps(snap), encoding="utf-8")
     return path
 
 
-def test_mock_as_shipped_is_refused(tmp_path):
+def test_off_day_snapshot_is_refused(tmp_path):
+    eve = ts_ms(14, 0, day=EXPIRY - dt.timedelta(days=3))
     with pytest.raises(ValueError, match="not expiry day"):
-        ft.predict(MOCK, EXPIRY, tmp_path)
+        ft.predict(snapshot_file(tmp_path, ts_ms=eve), EXPIRY, tmp_path / "fwd")
+
+
+def test_after_cutoff_is_refused(tmp_path):
+    with pytest.raises(ValueError, match="after the"):
+        ft.predict(snapshot_file(tmp_path, ts_ms=ts_ms(15, 0, 1)), EXPIRY, tmp_path / "fwd")
 
 
 def test_predict_on_mock(tmp_path):
@@ -133,7 +140,8 @@ def test_cli_predict_verify_score(tmp_path, monkeypatch, capsys):
                                       "--out", str(out)])
     ft.main()
     assert json.loads((out / "2026-10-19_score.json").read_text())["abs_error"]["S0"] == 0.0
-    monkeypatch.setattr(sys, "argv", ["forward_test.py", "predict", "--snapshot", str(MOCK), "--expiry", "2026-10-19",
+    off_day = snapshot_file(tmp_path / "off", ts_ms=ts_ms(14, 0, day=EXPIRY - dt.timedelta(days=3)))
+    monkeypatch.setattr(sys, "argv", ["forward_test.py", "predict", "--snapshot", str(off_day), "--expiry", "2026-10-19",
                                       "--out", str(tmp_path / "x")])
     with pytest.raises(SystemExit, match="refused"):
         ft.main()
