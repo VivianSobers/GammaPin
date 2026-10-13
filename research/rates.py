@@ -17,8 +17,8 @@ Conversion. RBI's implicit yield y is simple interest, actual/365 (since 27 Oct 
 costs P = 100 / (1 + y * 91/365). Black-76 discounts with exp(-r T); matching the same price gives
     r = (365 / 91) * ln(1 + y * 91/365)          (y and r as decimals)
 
-Look-ahead rule: `rate_on(day)` uses the latest auction dated on or before `day` (auctions are on
-Wednesdays; the result is out the same day), constant within the day.
+Look-ahead rule: `rate_on(day)` uses the latest auction dated strictly before `day` (auctions are on
+Wednesdays; a same-day cut-off may not be public by the 14:00 IST decision), constant within the day.
 """
 
 from __future__ import annotations
@@ -68,10 +68,13 @@ def load(path: Path = PATH) -> pl.DataFrame:
 
 
 def rate_on(day: dt.date, df: pl.DataFrame) -> float:
-    """Continuous decimal rate from the latest auction on or before `day`."""
-    prior = df.filter(pl.col("date") <= day)
+    """Continuous decimal rate from the latest auction strictly before `day`.
+
+    A same-day auction is excluded: its cut-off may not be public by the 14:00 IST decision.
+    """
+    prior = df.filter(pl.col("date") < day)
     if prior.is_empty():
-        raise LookupError(f"no 91-day T-bill auction on or before {day}")
+        raise LookupError(f"no 91-day T-bill auction before {day}")
     return float(prior["r"][-1])
 
 

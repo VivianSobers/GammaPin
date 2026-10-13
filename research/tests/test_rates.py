@@ -24,12 +24,13 @@ def test_load_normalises_header_and_dates():
     assert df["r"][2] == pytest.approx(rates.continuous(5.5))
 
 
-def test_rate_on_uses_latest_auction_on_or_before_day():
+def test_rate_on_uses_latest_auction_before_day():
     df = rates.load(FIXTURE)
-    assert rates.rate_on(dt.date(2026, 10, 8), df) == pytest.approx(rates.continuous(5.5))
-    assert rates.rate_on(dt.date(2026, 10, 7), df) == pytest.approx(rates.continuous(5.4))
+    assert rates.rate_on(dt.date(2026, 10, 9), df) == pytest.approx(rates.continuous(5.5))
+    # same-day auction is not yet known at the decision time
+    assert rates.rate_on(dt.date(2026, 10, 8), df) == pytest.approx(rates.continuous(5.4))
     with pytest.raises(LookupError):
-        rates.rate_on(dt.date(2026, 9, 24), df)
+        rates.rate_on(dt.date(2026, 9, 25), df)
 
 
 def test_iso_dates_blank_rows_and_duplicates(tmp_path):
