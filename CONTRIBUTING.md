@@ -84,7 +84,7 @@ Start on a Wednesday so day 7 and day 14 are Nifty expiry Tuesdays. See [docs/CA
 | # | Task | Status |
 |---|---|---|
 | G1.1 | Normal CDF/PDF (`libm::erfc`) and Black-76 call/put prices | ✅ |
-| G1.2 | Gamma and vega | ❌ |
+| G1.2 | Gamma and vega | ✅ |
 | G1.3 | IV solver: bracketed Newton, Brent fallback, \|price error\| < 1e-8, ≤ 50 iterations | ❌ |
 | G1.4 | Property test: price(σ) → IV → σ within 1e-6, σ ∈ [0.01, 3], T ∈ [1 min, 30 days] | ❌ |
 | G1.5 | Cross-check against `py_vollib` reference values | ❌ |
