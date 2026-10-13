@@ -133,7 +133,7 @@ Start on a Wednesday so day 7 and day 14 are Nifty expiry Tuesdays. See [docs/CA
 | G4.2 | Statistics: paired Wilcoxon, block-bootstrap CI (10,000 resamples) | ✅ |
 | G4.3 | H1 pipeline (`h1_pinning.py`) | ✅ |
 | G4.4 | H2 pipeline (`h2_vol.py`): HAR controls, Newey-West (6 lags), out-of-sample R² | ✅ |
-| G4.5 | Look-ahead guards and perturbation test | ❌ |
+| G4.5 | Look-ahead guards and perturbation test | ✅ |
 | G4.6 | Fill every `TBD` in `PREREGISTRATION.md` (split dates, block length, success criteria) | ❌ |
 | G4.7 | **Freeze:** commit and tag `prereg-v1` before touching the test set | ❌ |
 | G4.8 | Run H1 and H2 on the training set | ❌ |
