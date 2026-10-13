@@ -47,6 +47,92 @@ Stated approximation: participant OI covers all NSE index options and is not per
 - Settlement never a feature.
 - Perturbation test: changing data after the decision time leaves features unchanged.
 
+## Analysis details (draft, not frozen)
+
+These are the implementation decisions already in code (`research/`, `crates/gp-quant`). They become pre-registered at the freeze. Values marked `TBD` above are not set here.
+
+### Data and look-ahead
+
+| Item | Rule |
+|---|---|
+| Candle timing | A 1-minute candle stamped `ts` (its start, naive IST) is known only from `ts + 1 min`. |
+| Chain as of t | Per contract, the last known close and the last known OI. A close is used only if it is less than 30 minutes old at t (candle start > t − 31 min); otherwise its price counts as missing (0, rejected by the quote filters) while its OI is kept. A side with no known candle has price 0 and OI 0. |
+| Participant OI | Latest NSE file dated strictly before the trading day, index-option columns, in contracts. Error if that file is more than 7 calendar days older than the day. |
+| Risk-free rate | Cut-off yield y (decimal) of the latest RBI 91-day T-bill auction dated on or before the day, constant within the day, converted to r = (365/91)·ln(1 + y·91/365). Source: hand-built CSV `research/cache/tbill_91d.csv`. |
+| Settlement | Official Nifty 50 `Closing Index Value` on the expiry date, from NSE `ind_close_all_DDMMYYYY.csv`. Target only. |
+| Option OI units | Upstox candle OI assumed in units (lot size × contracts) and divided by the lot size (`OI_IN_UNITS = True`). |
+| Fetch window | Expiry − 6 calendar days to expiry, every listed strike (the default; see Open items for `--band-pct`). |
+| Coverage | An expiry is `complete` when both the index candle count and the number of distinct option-candle minutes (union over contracts, on index dates) reach ≥ 95% of 375 × sessions in the index data. |
+| Time to expiry | T = trading minutes to 15:30 on expiry / (252 × 375): today's minutes from max(t, 09:15), plus 375 per trading session after today up to expiry. Floored at one trading minute. Trading sessions = dates in the cached index candles (H1 also adds the expiry dates). |
+
+### Pricing and GEX (gp-quant, candle mode)
+
+| Step | Rule |
+|---|---|
+| Quotes | The close is used as bid = ask. The two-sided checks (bid > 0, ask > bid, spread ≤ max(25% of mid, 4 ticks of 0.05)) are skipped; mid ≥ 0.10 is kept. |
+| Forward | F_K = K + e^{rT}(C_mid − P_mid) at strikes where both mids pass. F = median of F_K over the 3 strikes with the smallest \|C_mid − P_mid\| (ties → lower strike; with fewer than 3, the median of those available). None → no chain. |
+| IV | Black-76 on each strike's OTM quote (call if K ≥ F, else put). Rejected if mid < discounted intrinsic, the solver fails, or σ ∉ [0.01, 3.0]. Solver: Newton in the bracket [1e-4, 5] with Brent fallback, \|price error\| < 1e-8. No IV at any strike → no chain. |
+| Smile gaps | Rejected strikes get σ by linear interpolation in strike between the nearest accepted strikes, flat beyond the ends. |
+| Gamma | Black-76 Γ at F with that σ (same for calls and puts). |
+| GEX | GEX_K = (w_c·OI_K^C + w_p·OI_K^P)·Γ_K·lot·F²·0.01 (₹ per 1% move, OI in contracts). Net GEX = Σ_K GEX_K over all listed strikes. |
+| Flip | Net GEX recomputed at levels F·(1 + 0.0005·i), i = −60…60 (F ± 3% in 0.05% steps), each strike's σ, T and r held fixed (sticky strike). Sign changes between adjacent levels located by linear interpolation (an exact zero at a level also counts); the one nearest F is kept. None if net GEX keeps one sign. |
+| Pin | Strike with the largest positive GEX_K; ties → higher strike. None if no GEX_K > 0. |
+
+### H1 implementation
+
+| Item | Rule |
+|---|---|
+| Decision time | 14:00 IST on the expiry day; the chain uses candles stamped ≤ 13:59. |
+| Inputs | r and S1/S2 weights for the expiry date (rules above). |
+| Max pain | Listed strike in the 14:00 chain minimising Σ_j OI_j^C·max(K − K_j, 0) + OI_j^P·max(K_j − K, 0). Ties → lower strike. Non-finite or negative OI counts as 0. NaN if total OI is 0. |
+| Nearest 100 | F at 14:00 rounded to the nearest multiple of 100, halves up. |
+| No move | F at 14:00. |
+| No options file | Status `no_options`; every prediction NaN. |
+| No rate | Status `no_rate`; every prediction NaN, baselines included. |
+| No participant OI | `weights_ok = false`; S1 and S2 NaN; S0 and baselines kept. |
+| No forward or no smile | Status `no_chain`; GEX pins, nearest 100 and no move NaN; max pain still computed from the chain. |
+| Pin None | NaN for that convention. |
+| No settlement | Errors NaN; status unchanged. |
+| NaN errors | Excluded from that method's MAE and from every paired comparison it enters. Each MAE reports its n; each comparison reports n and n_excluded. |
+
+Tests, per (S·, baseline) pair (3 × 3), on the expiries where both errors are finite, in chronological order, with d = \|err_S\| − \|err_baseline\|:
+
+- **Wilcoxon:** two-sided signed-rank on d; zero differences dropped (`zero_method="wilcox"`); all d = 0 gives statistic 0, p = 1.
+- **Bootstrap:** moving-block bootstrap of mean(d): ⌈n/b⌉ blocks of length b with uniform starts in [0, n − b] (no wrap-around), concatenated and cut to n; 10,000 resamples; 95% percentile CI; seed 20261013 for every comparison. Skipped, with a note, when n < b.
+- **Block length b:** `TBD` above. Until set, the train split uses a provisional 3 with a warning; the test split refuses to run.
+- **Split while `last_train_expiry` is `TBD`:** train = first ⌈0.7·n⌉ cached expiries (provisional, with a warning). The test split refuses to run, and also requires the git tag `prereg-v1`.
+
+### H2 implementation
+
+| Item | Rule |
+|---|---|
+| Bars | 5-minute bars aligned to 09:15 (75 per session). Candles off the minute grid or outside 09:15–15:30 are dropped. |
+| RV | sqrt(Σ squared 1-minute log returns of the candles stamped in the bar). Return = log(close / previous close of the same session); the session's first candle uses log(close / open), so no overnight return. RV is null with fewer than 3 returns. |
+| Target | y = log RV of bar t+1, where t+1 is the next bar index of the same session; otherwise null. Rows with null y are not used for fitting or scoring. |
+| HAR | har_5m = log RV_t; har_1h = log of the mean RV over bars t−11…t; har_1d = log of the mean RV over bars t−74…t. Windows run over consecutive available bars in time order, across sessions (overnight gaps skipped). Rows without a full window (any null RV) are dropped. |
+| Time of day | Bucket k = bar // 6 (30 minutes), k = 0…12; dummies for k = 1…12; 09:15–09:45 is the reference. Bucket 12 is 15:15–15:30 (3 bars). |
+| dte | Trading sessions d with date(t) < d ≤ expiry (0 on expiry day). |
+| GEX inputs | Chain of that expiry as of bar_end(t), with r and S1/S2 weights of date(t). Bars where the chain gives no forward or smile are dropped. |
+| Flip terms | flip_dist_S = (F − flip_S)/F at bar_end(t); 0 and flip_none_S = 1 when there is no flip. |
+| Standardization | gex_z_S = (net GEX_S − mean)/std, mean and sample std (ddof 1) from the training rows with non-null y only; the same constants are applied to evaluation rows. |
+| Models, per S | Model: const + 3 HAR + 12 tod + dte + flip_dist_S + flip_none_S + gex_z_S. Primary baseline: the same without gex_z_S. Secondary baseline `har_only`: const + HAR + tod + dte. Columns with no variation in the training rows are dropped (if gex_z_S is dropped the run fails). |
+| Estimation | OLS on training rows pooled over expiries and sorted by bar_end; Newey-West HAC (Bartlett), 6 lags. |
+| Score | R²_oos = 1 − SSE_model/SSE_baseline on the evaluation rows. Also reported: the same against `har_only`, and 1 − SSE/SST for each model. |
+| Expiry week | Trading days d with max(expiry − 6 days, previous cached expiry + 1 day) ≤ d ≤ expiry. |
+| Missing inputs | A day without a rate or participant OI is dropped for all conventions (listed in `skipped_days`). |
+| Train split | In-sample fit on all training rows, plus pseudo-OOS: the training expiries with usable rows, in order; the first max(1, ⌊0.7·n⌋) are standardized and fitted, the rest evaluated. Skipped with fewer than 2 expiries. |
+| Test split | Standardize and fit on all training rows, score on the test rows. Requires the git tag `prereg-v1`. |
+
+### Open items
+
+- **Coverage not applied.** Neither the H1 nor the H2 pipeline filters expiries by the coverage `complete` flag, and no per-contract coverage filter exists, so the "Kept contracts" rule in the Data table is not yet implemented.
+- **Sample size.** The Upstox Expiries endpoint lists only about 6 months of history (about 26 weekly expiries), so the ~50 expiries in the Data table may not be reachable.
+- **Option OI units.** `OI_IN_UNITS` is an unverified assumption; check it against NSE bhavcopy OI on the first real data.
+- **Success criteria.** H1 and H2 success criteria are `TBD`.
+- **H2 split guard.** H2 calls `prereg.split` directly, so while `last_train_expiry` is `TBD` it falls back to ⌈0.7·n⌉ in both splits; the test split is guarded only by the `prereg-v1` tag. H1 refuses the test split while it is `TBD`.
+- **Strike band.** `fetch_expired.py --band-pct` picks strikes with the expiry-eve close, which is after the earlier days H2 uses. Data for H2 must be fetched without it.
+- **Same-day T-bill auction.** `rate_on` uses an auction dated on the day itself; whether its result is published before 14:00 IST is not verified.
+
 ## Deviations
 
 None yet.
