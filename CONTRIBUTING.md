@@ -130,7 +130,7 @@ Start on a Wednesday so day 7 and day 14 are Nifty expiry Tuesdays. See [docs/CA
 | # | Task | Status |
 |---|---|---|
 | G4.1 | Baselines: max pain, nearest multiple of 100, F at 14:00 | ✅ |
-| G4.2 | Statistics: paired Wilcoxon, block-bootstrap CI (10,000 resamples) | ❌ |
+| G4.2 | Statistics: paired Wilcoxon, block-bootstrap CI (10,000 resamples) | ✅ |
 | G4.3 | H1 pipeline (`h1_pinning.py`) | ❌ |
 | G4.4 | H2 pipeline (`h2_vol.py`): HAR controls, Newey-West (6 lags), out-of-sample R² | ❌ |
 | G4.5 | Look-ahead guards and perturbation test | ❌ |
