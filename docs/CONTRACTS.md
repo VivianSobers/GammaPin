@@ -32,3 +32,47 @@ One row per de-duplicated feed update. The same fields, in the same order, are t
 **Layout:** `data/merged/date=YYYY-MM-DD/instrument=<key with | replaced by _>/part-0.parquet`, rows sorted by (`ltt_ms`, `recv_ns`).
 
 **Fixture:** each side may generate synthetic C1 rows for tests. No real ticks are committed.
+
+## C2: monitor snapshot (WebSocket JSON)
+
+Producer: `gp-monitor` server (Vivian). Consumer: `static/index.html` (Guru).
+
+`GET /ws` upgrades to a WebSocket that sends one JSON text message per second. Example: [`crates/gp-monitor/static/mock/snapshot.json`](../crates/gp-monitor/static/mock/snapshot.json).
+
+| Field | Type | Notes |
+|---|---|---|
+| `v` | int | Schema version, currently `1` |
+| `ts_ms` | int | Snapshot time, Unix ms |
+| `source` | string | `"live"` or `"replay"` |
+| `underlying` | string | `"NIFTY"` |
+| `expiry` | string | `YYYY-MM-DD` of the chain shown |
+| `spot` | number | Index LTP |
+| `forward` | number | F from `gp_quant::analyze` |
+| `t_years` | number | Time to expiry used |
+| `conventions` | object | Keyed by `"S0"`, `"S1"` (and optionally `"S2"`), see below |
+| `strikes` | number[] | Strikes in ascending order, shared by every `gex` array |
+| `h1_accuracy` | object or null | Keyed by convention: `{ "mae": number, "n": int }` from training-set H1 |
+| `health` | object | See below |
+
+Each `conventions.<S>` object:
+
+| Field | Type | Notes |
+|---|---|---|
+| `gex` | number[] | ₹ per 1% move, aligned with `strikes` |
+| `net_gex` | number | Sum of `gex` |
+| `flip` | number or null | Null when there is no sign change within F ± 3% |
+| `pin` | number or null | Strike with the largest positive GEX, null when none is positive |
+| `regime` | string | `"long_gamma"` when `net_gex > 0`, else `"short_gamma"` |
+
+`health`:
+
+| Field | Type | Notes |
+|---|---|---|
+| `lag_ms_p50` | number | Exchange `ltt_ms` to snapshot, last 60 s |
+| `lag_ms_p99` | number | |
+| `gaps_today` | int | `GAP_START` records today across nodes |
+| `nodes` | object | `{ "A": "up" \| "down", "B": ... }` |
+| `quotes_used` | int | Quotes that passed the filters |
+| `quotes_total` | int | Quotes in the chain |
+
+The page always shows "Analytics, not trading advice." regardless of the payload.
