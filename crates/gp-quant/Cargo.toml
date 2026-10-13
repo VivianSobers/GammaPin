@@ -17,3 +17,6 @@ python = ["dep:pyo3", "dep:numpy"]
 libm.workspace = true
 pyo3 = { workspace = true, optional = true }
 numpy = { workspace = true, optional = true }
+
+[dev-dependencies]
+proptest.workspace = true
