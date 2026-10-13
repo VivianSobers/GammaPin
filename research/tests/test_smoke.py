@@ -2,7 +2,10 @@ import importlib
 
 import pytest
 
-MODULES = ["fetch_expired", "participant_oi", "h1_pinning", "h2_vol", "validate_ticks"]
+MODULES = [
+    "fetch_expired", "participant_oi", "instruments", "rates", "settlements",
+    "h1_pinning", "h2_vol", "validate_ticks", "forward_test",
+]
 
 
 @pytest.mark.parametrize("name", MODULES)
