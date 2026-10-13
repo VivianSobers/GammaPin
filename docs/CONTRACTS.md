@@ -76,3 +76,46 @@ Each `conventions.<S>` object:
 | `quotes_total` | int | Quotes in the chain |
 
 The page always shows "Analytics, not trading advice." regardless of the payload.
+
+## C3: `gp-quant` API
+
+Producer: `gp-quant` (Guru). Consumers: `gp-monitor` live engine (Vivian), `research/` via the Python bindings (Guru).
+
+The types live in [`crates/gp-quant/src/chain.rs`](../crates/gp-quant/src/chain.rs). The signatures are fixed; the bodies arrive in G3.
+
+```rust
+pub struct Quote { pub bid: f64, pub ask: f64, pub oi: f64 }      // oi in contracts; 0.0 when absent
+pub struct StrikeRow { pub strike: f64, pub call: Quote, pub put: Quote }
+
+pub struct ChainInput<'a> {
+    pub rows: &'a [StrikeRow],   // one expiry, strikes ascending
+    pub r: f64,                  // RBI 91-day T-bill, decimal
+    pub t_years: f64,            // from gp_quant::time
+    pub lot_size: f64,
+    pub filter: FilterConfig,    // FilterConfig::LIVE for ticks, ::CANDLES for minute closes
+}
+
+pub struct Weights { pub w_c: f64, pub w_p: f64 }                 // Weights::S0 = { +1, -1 }
+
+pub struct ConventionResult {
+    pub gex: Vec<f64>,       // ₹ per 1% move, aligned with rows
+    pub net_gex: f64,
+    pub flip: Option<f64>,
+    pub pin: Option<f64>,
+}
+
+pub struct Analysis {
+    pub forward: f64,
+    pub iv: Vec<f64>,        // per row; NaN where no usable quote
+    pub gamma: Vec<f64>,
+    pub quotes_used: usize,
+    pub quotes_total: usize,
+    pub conventions: Vec<ConventionResult>,   // same order as `weights`
+}
+
+pub fn analyze(input: &ChainInput, weights: &[Weights]) -> Result<Analysis, QuantError>;
+```
+
+- `gp-monitor` builds `rows` from the latest C1 event per instrument, calls `analyze` once per second per expiry, and maps the result to C2. `regime` in C2 is the sign of `net_gex`.
+- When there is a quote, its mid is (bid + ask) / 2. In candle mode, pass `bid = ask = close`.
+- `analyze` never panics on bad quotes. It drops them and counts them in `quotes_used`.
