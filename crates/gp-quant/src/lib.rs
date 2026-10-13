@@ -9,6 +9,7 @@ pub mod gex;
 pub mod iv;
 pub mod norm;
 pub mod time;
+pub mod weights;
 
 pub use black76::OptType;
 pub use chain::{
@@ -17,6 +18,7 @@ pub use chain::{
 };
 pub use filter::FilterConfig;
 pub use time::MIN_T_YEARS;
+pub use weights::{Convention, ParticipantOi};
 
 #[cfg(feature = "python")]
 mod python;
