@@ -13,6 +13,7 @@ DAY = dt.date(2026, 10, 27)
 F, R, LOT = 25_012.5, 0.065, 75
 STRIKES = np.arange(24_000.0, 26_001.0, 50.0)
 START, MINUTES = dt.time(13, 30), 61
+RECV_LAG_NS = 3_000_007  # receive a few ms after the trade time
 
 
 def world(minutes=MINUTES, start=START):
@@ -47,16 +48,17 @@ def candles(oi_scale=None) -> pl.DataFrame:
 
 
 def c1_events() -> pl.DataFrame:
-    """C1 rows: one event per contract per minute at second 59.5, L1 quote = price -/+ 0.05."""
+    """C1 rows: one event per contract per minute traded at second 59.5 and received 3 ms later,
+    L1 quote = price -/+ 0.05."""
     rows = []
     for ts, kind, px, oi in world():
         ltt = vt.ist_ms(ts + dt.timedelta(seconds=59.5))
         for i, (k, p, o) in enumerate(zip(STRIKES, px, oi)):
             key = f"NSE_FO|{40_000 + 2 * i + (kind == 'PE')}"
             bid, ask = [p - 0.05, 0, 0, 0, 0], [p + 0.05, 0, 0, 0, 0]
-            rows.append((key, "NIFTY", kind, DAY, k, LOT, ltt, ltt * 1_000_000 + 7, p, 75, 1_000, int(o),
+            rows.append((key, "NIFTY", kind, DAY, k, LOT, ltt, ltt * 1_000_000 + RECV_LAG_NS, p, 75, 1_000, int(o),
                          bid, [75, 0, 0, 0, 0], ask, [75, 0, 0, 0, 0], 3))
-        rows.append(("NSE_INDEX|Nifty 50", "NIFTY", "IDX", None, None, 0, ltt, ltt * 1_000_000, F, 0, 0, 0,
+        rows.append(("NSE_INDEX|Nifty 50", "NIFTY", "IDX", None, None, 0, ltt, ltt * 1_000_000 + RECV_LAG_NS, F, 0, 0, 0,
                      [0.0] * 5, [0] * 5, [0.0] * 5, [0] * 5, 1))
     return pl.DataFrame(
         rows,
@@ -96,25 +98,69 @@ def at(h, m):
 
 def test_ist_ms():
     assert vt.ist_ms(dt.datetime(1970, 1, 1, 5, 30)) == 0
+    assert vt.ist_ns(dt.datetime(1970, 1, 1, 5, 30)) == 0
+    assert vt.ist_ns(dt.datetime(1970, 1, 1, 0, 0)) == -19_800 * 1_000_000_000
+    ts = dt.datetime(2026, 10, 27, 14, 0, 0, 123_456)
+    assert vt.ist_ns(ts) == 1_793_089_800_123_456_000
+    assert vt.ist_ms(ts) == 1_793_089_800_123
 
 
 def test_load_events_roundtrip(merged, events):
     loaded = vt.load_events(merged, DAY)
     assert loaded.height == events.height
-    assert loaded["ltt_ms"].is_sorted()
+    assert loaded["recv_ns"].is_sorted()
     with pytest.raises(FileNotFoundError):
         vt.load_events(merged, DAY + dt.timedelta(days=1))
 
 
-def test_tick_chain_at_is_as_of_ltt(events):
+def test_tick_chain_at_is_as_of_recv(events):
     ch = vt.tick_chain_at(events, DAY, at(14, 0))
     assert len(ch["strike"]) == len(STRIKES) and ch["lot"] == LOT
     assert np.allclose(ch["call_ask"] - ch["call_bid"], 0.1)
     expected = {kind: px for ts, kind, px, _ in vt_world_at(at(13, 59))}
     assert np.allclose(0.5 * (ch["call_bid"] + ch["call_ask"]), expected["CE"])
     assert np.allclose(0.5 * (ch["put_bid"] + ch["put_ask"]), expected["PE"])
+    assert ch["quote_age_med_s"] == pytest.approx(0.5)
     assert len(vt.tick_chain_at(events, DAY, at(13, 30))["strike"]) == 0
     assert len(vt.tick_chain_at(events, DAY + dt.timedelta(days=7), at(14, 0))["strike"]) == 0
+
+
+def stale_update(events, recv_ns, oi=999_999):
+    """An OI-only update for the 25000 CE: old ltt_ms (13:49:59.5, no new trade), received at `recv_ns`."""
+    old = events.filter(
+        (pl.col("kind") == "CE") & (pl.col("strike") == 25_000.0)
+        & (pl.col("ltt_ms") == vt.ist_ms(at(13, 49)) + 59_500)
+    )
+    assert old.height == 1
+    return pl.concat([events, old.with_columns(pl.lit(recv_ns, pl.Int64).alias("recv_ns"),
+                                               pl.lit(oi, pl.Int64).alias("oi"))])
+
+
+def test_update_received_after_ts_is_excluded(events):
+    i = int(np.flatnonzero(STRIKES == 25_000.0)[0])
+    base = vt.tick_chain_at(events, DAY, at(14, 0))
+    late = stale_update(events, vt.ist_ns(at(14, 0)) + 1)
+    stale = late.filter(pl.col("oi") == 999_999)
+    assert stale["ltt_ms"].item() <= vt.ist_ms(at(14, 0))  # an ltt_ms <= ts filter would admit it
+    ch = vt.tick_chain_at(late, DAY, at(14, 0))
+    assert ch["call_oi"][i] == base["call_oi"][i] != 999_999
+    assert np.array_equal(ch["call_bid"], base["call_bid"])
+    assert ch["quote_age_med_s"] == pytest.approx(0.5)
+
+
+def test_update_received_just_before_ts_is_included(events):
+    i = int(np.flatnonzero(STRIKES == 25_000.0)[0])
+    base = vt.tick_chain_at(events, DAY, at(14, 0))
+    for recv in (vt.ist_ns(at(14, 0)) - 1, vt.ist_ns(at(14, 0))):
+        ch = vt.tick_chain_at(stale_update(events, recv), DAY, at(14, 0))
+        assert ch["call_oi"][i] == 999_999
+        assert np.delete(ch["call_oi"], i).tolist() == np.delete(base["call_oi"], i).tolist()
+        assert ch["call_bid"][i] != base["call_bid"][i]  # the stale event's quote, not the 13:59 one
+    # first events trade at 13:30:59.5 and arrive 3 ms + 7 ns later
+    first = dt.datetime.combine(DAY, dt.time(13, 30, 59, 503_000))
+    assert len(vt.tick_chain_at(events, DAY, first)["strike"]) == 0
+    assert len(vt.tick_chain_at(events, DAY, first + dt.timedelta(microseconds=1))["strike"]) == len(STRIKES)
+    assert vt.tick_chain_at(events, DAY, at(13, 31))["quote_age_med_s"] == pytest.approx(0.5)
 
 
 def vt_world_at(ts):

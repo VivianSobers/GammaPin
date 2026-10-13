@@ -5,8 +5,15 @@ tick feed would have shown. On expiries captured live, this script builds both c
 same instants and reports how far apart the forward, flip, pin and GEX profile are.
 
 Tick side: C1 merged events (docs/CONTRACTS.md), `data/merged/date=YYYY-MM-DD/instrument=*/part-0.parquet`.
-As of IST time `ts`, the last event per (strike, kind) with `ltt_ms <= ts` gives the L1 bid, ask
-and OI, analysed in LIVE mode. Candle side: `gpdata.analyze_at` on the expired-options parquet.
+As of IST time `ts`, the last event per (strike, kind) with `recv_ns <= ts`, ordered by
+(`recv_ns`, `ltt_ms`), gives the L1 bid, ask and OI, analysed in LIVE mode. Candle side:
+`gpdata.analyze_at` on the expired-options parquet.
+
+Availability is by receive time, not exchange time. `ltt_ms` is the last-TRADE time: a quote or
+OI update without a new trade keeps the old `ltt_ms`, so filtering on `ltt_ms <= ts` would admit
+events that arrived after `ts` (look-ahead), most often on illiquid strikes. `recv_ns` is when the
+event first reached us, so it is what a live process could have known at `ts`. `ltt_ms` is kept
+only for reporting: the median quote age (`ts` minus `ltt_ms` of the selected events).
 """
 
 from __future__ import annotations
@@ -25,20 +32,27 @@ ROOT = Path(__file__).resolve().parent.parent
 MERGED = ROOT / "data" / "merged"
 OUTPUT = Path(__file__).resolve().parent / "output"
 IST = dt.timezone(dt.timedelta(hours=5, minutes=30))
+EPOCH = dt.datetime(1970, 1, 1, tzinfo=dt.timezone.utc)
 DECISION = dt.time(14, 0)
 
 
 def load_events(merged_dir: Path, day: dt.date) -> pl.DataFrame:
-    """Every C1 event for one date, sorted by (ltt_ms, recv_ns)."""
+    """Every C1 event for one date, sorted by availability: (recv_ns, ltt_ms)."""
     files = sorted((merged_dir / f"date={day.isoformat()}").glob("instrument=*/part-0.parquet"))
     if not files:
         raise FileNotFoundError(f"no C1 partitions under {merged_dir / f'date={day.isoformat()}'}")
-    return pl.concat([pl.read_parquet(f) for f in files], how="vertical_relaxed").sort(["ltt_ms", "recv_ns"])
+    return pl.concat([pl.read_parquet(f) for f in files], how="vertical_relaxed").sort(["recv_ns", "ltt_ms"])
+
+
+def ist_ns(ts: dt.datetime) -> int:
+    """Unix ns of a naive IST datetime (IST = UTC+5:30), in exact integer arithmetic."""
+    d = ts.replace(tzinfo=IST) - EPOCH
+    return (d.days * 86_400 + d.seconds) * 1_000_000_000 + d.microseconds * 1_000
 
 
 def ist_ms(ts: dt.datetime) -> int:
     """Unix ms of a naive IST datetime."""
-    return int(ts.replace(tzinfo=IST).timestamp() * 1000)
+    return ist_ns(ts) // 1_000_000
 
 
 def _level1(col: str, dtype: pl.DataType) -> pl.Expr:
@@ -47,10 +61,14 @@ def _level1(col: str, dtype: pl.DataType) -> pl.Expr:
 
 
 def tick_chain_at(events: pl.DataFrame, expiry: dt.date, ts: dt.datetime) -> dict:
-    """One row per strike as of exchange time `ts` (naive IST): last L1 bid, ask and OI per side."""
+    """One row per strike as of receive time `ts` (naive IST): last L1 bid, ask and OI per side.
+
+    Only events with `recv_ns <= ts` are available; the last per (strike, kind) by (`recv_ns`,
+    `ltt_ms`) is used. `quote_age_med_s` is the median of `ts - ltt_ms` over the selected events.
+    """
     opts = events.filter(
-        pl.col("kind").is_in(["CE", "PE"]) & (pl.col("expiry") == expiry) & (pl.col("ltt_ms") <= ist_ms(ts))
-    )
+        pl.col("kind").is_in(["CE", "PE"]) & (pl.col("expiry") == expiry) & (pl.col("recv_ns") <= ist_ns(ts))
+    ).sort(["recv_ns", "ltt_ms"])
     last = opts.group_by(["strike", "kind"], maintain_order=True).last().with_columns(
         _level1("bid_px", opts.schema["bid_px"]).alias("bid"),
         _level1("ask_px", opts.schema["ask_px"]).alias("ask"),
@@ -68,6 +86,8 @@ def tick_chain_at(events: pl.DataFrame, expiry: dt.date, ts: dt.datetime) -> dic
     chain = side("CE", "call").join(side("PE", "put"), on="strike", how="full", coalesce=True).fill_null(0.0).sort("strike")
     out = {c: chain[c].to_numpy().astype(np.float64) for c in chain.columns}
     out["lot"] = float(opts["lot_size"][0]) if opts.height else float("nan")
+    age = last.select(((ist_ms(ts) - pl.col("ltt_ms")) / 1000.0).median()).item() if last.height else None
+    out["quote_age_med_s"] = None if age is None else float(age)
     return out
 
 
@@ -92,6 +112,7 @@ def analyze_ticks_at(
     except ValueError:
         return None
     out["strikes"] = ch["strike"]
+    out["quote_age_med_s"] = ch["quote_age_med_s"]
     return out
 
 
@@ -117,7 +138,8 @@ def compare(tick: dict | None, candle: dict | None, names: list[str]) -> list[di
     for i, name in enumerate(names):
         row: dict = {"convention": name, "tick_ok": tick is not None, "candle_ok": candle is not None}
         if tick is not None:
-            row |= {"quotes_used_tick": tick["quotes_used"], "quotes_total_tick": tick["quotes_total"]}
+            row |= {"quotes_used_tick": tick["quotes_used"], "quotes_total_tick": tick["quotes_total"],
+                    "quote_age_med_s": tick.get("quote_age_med_s")}
         if candle is not None:
             row |= {"quotes_used_candle": candle["quotes_used"], "quotes_total_candle": candle["quotes_total"]}
         if tick is None or candle is None:
@@ -168,6 +190,7 @@ COLUMNS = [
     "n_common", "gex_corr", "gex_rel_l1",
     "net_gex_tick", "net_gex_candle", "net_gex_ratio",
     "quotes_used_tick", "quotes_total_tick", "quotes_used_candle", "quotes_total_candle",
+    "quote_age_med_s",
 ]
 
 
@@ -200,15 +223,16 @@ def summarize(df: pl.DataFrame, day: dt.date, expiry: dt.date, decision: dt.time
     lines = [
         f"# Tick vs candle validation, {day.isoformat()} (expiry {expiry.isoformat()})",
         "",
-        "Tick chain: last C1 event per contract with `ltt_ms <= ts`, LIVE filters. "
+        "Tick chain: last C1 event per contract with `recv_ns <= ts` (receive time, no look-ahead), LIVE filters; "
+        "quote age is `ts` minus the selected events' `ltt_ms` (last-trade time). "
         "Candle chain: `gpdata.analyze_at`, CANDLES filters. Differences are tick minus candle; "
         "net GEX ratio is candle / tick; relative L1 is sum |g_tick - g_candle| / sum |g_tick| on common strikes.",
         "",
         "## Medians",
         "",
         "| Convention | Rows (both ok / all) | median abs dF | median abs d flip | pin agreement | median pin dist "
-        "| median corr | median rel L1 | median net ratio |",
-        "|---|---|---|---|---|---|---|---|---|",
+        "| median corr | median rel L1 | median net ratio | median quote age (s) |",
+        "|---|---|---|---|---|---|---|---|---|---|",
     ]
     worst = []
     for name in df["convention"].unique(maintain_order=True):
@@ -224,7 +248,7 @@ def summarize(df: pl.DataFrame, day: dt.date, expiry: dt.date, decision: dt.time
             f"| {name} | {ok.height}/{d.height} | {_fmt(med(pl.col('forward_diff').abs()))} "
             f"| {_fmt(med(pl.col('flip_diff').abs()))} | {agree} | {_fmt(med(pl.col('pin_dist')), 0)} "
             f"| {_fmt(med(pl.col('gex_corr')), 4)} | {_fmt(med(pl.col('gex_rel_l1')), 4)} "
-            f"| {_fmt(med(pl.col('net_gex_ratio')), 4)} |"
+            f"| {_fmt(med(pl.col('net_gex_ratio')), 4)} | {_fmt(med(pl.col('quote_age_med_s')), 1)} |"
         )
         for label, expr, desc in (
             ("lowest GEX corr", pl.col("gex_corr"), False),
