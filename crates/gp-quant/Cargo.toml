@@ -14,5 +14,6 @@ crate-type = ["cdylib", "rlib"]
 python = ["dep:pyo3", "dep:numpy"]
 
 [dependencies]
+libm.workspace = true
 pyo3 = { workspace = true, optional = true }
 numpy = { workspace = true, optional = true }
