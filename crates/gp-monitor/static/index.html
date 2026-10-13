@@ -3,10 +3,151 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
   <title>GammaPin Monitor</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/uplot@1.6.31/dist/uPlot.min.css">
+  <link rel="stylesheet" href="style.css">
+  <script>
+    // Apply a saved theme choice before first paint (auto when absent or storage is blocked).
+    try { var t = localStorage.getItem('gp-theme'); if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t); } catch (e) {}
+  </script>
 </head>
-<body>
-  <div id="banner">Analytics, not trading advice.</div>
-  <!-- TODO(phase 6): F, flip level, GEX by strike (S0/S1), pin, regime, H1 accuracy, data health. uPlot over /ws. -->
+<body class="no-data">
+  <!-- Always visible, independent of payload and connection state (C2). Not touched by any script. -->
+  <div id="banner" role="note">Analytics, not trading advice.</div>
+
+  <div class="status" role="status" aria-live="polite">
+    <span id="st-source" class="pill src waiting">WAITING</span>
+    <span id="st-mock-reason" class="muted"></span>
+    <span class="st-item">updated <span id="st-age" class="num">no data yet</span></span>
+    <span class="st-item">WebSocket <span id="st-ws" class="ws-state connecting">connecting</span></span>
+    <span id="st-error" class="st-error"></span>
+  </div>
+
+  <main class="wrap">
+    <section class="card hero" aria-labelledby="hdr-title">
+      <div class="hero-top">
+        <div>
+          <h1 id="hdr-title">GammaPin monitor</h1>
+          <p class="muted small">snapshot <span id="hdr-ts" class="num">&mdash;</span> &middot; <span id="hdr-schema">schema &mdash;</span></p>
+        </div>
+        <div class="hero-right">
+          <span class="mock-flag">MOCK DATA</span>
+          <div id="hdr-regimes" class="regimes" aria-label="Regime per convention"></div>
+        </div>
+      </div>
+      <dl class="figures">
+        <div class="fig-tile">
+          <dt>Spot</dt>
+          <dd id="hdr-spot" class="num big">&mdash;</dd>
+          <dd class="sub">index LTP</dd>
+        </div>
+        <div class="fig-tile">
+          <dt>Forward F</dt>
+          <dd id="hdr-forward" class="num big">&mdash;</dd>
+          <dd id="hdr-basis" class="sub num">&mdash;</dd>
+        </div>
+        <div class="fig-tile">
+          <dt>Time to expiry</dt>
+          <dd id="hdr-minutes" class="num big">&mdash;</dd>
+          <dd class="sub"><span>trading min</span> &middot; <span id="hdr-tyears" class="num">&mdash;</span></dd>
+        </div>
+      </dl>
+    </section>
+
+    <section class="card chart-card" aria-labelledby="gex-title">
+      <div class="card-head">
+        <h2 id="gex-title">GEX by strike</h2>
+        <span class="muted small">&#8377; crore per 1% move, by sign convention</span>
+      </div>
+      <div id="gex-legend" class="legend" aria-live="off"></div>
+      <div id="gex-chart" class="chart"></div>
+      <ul id="gex-markers" class="marker-key" aria-label="Chart markers"></ul>
+    </section>
+
+    <div class="grid-2">
+      <section class="card" aria-labelledby="conv-title">
+        <div class="card-head">
+          <h2 id="conv-title">Per convention</h2>
+          <span class="muted small">pin is the H1 prediction; accuracy is training-set H1</span>
+        </div>
+        <table class="conv-table">
+          <thead>
+            <tr>
+              <th scope="col">Convention</th>
+              <th scope="col" class="num">Net GEX (&#8377; cr)</th>
+              <th scope="col" class="num">Flip</th>
+              <th scope="col" class="num">Pin &middot; H1 accuracy</th>
+              <th scope="col">Regime</th>
+            </tr>
+          </thead>
+          <tbody id="conv-rows">
+            <tr><td colspan="5" class="muted">Waiting for the first snapshot&hellip;</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="card" aria-labelledby="health-title">
+        <div class="card-head">
+          <h2 id="health-title">Data health</h2>
+        </div>
+        <dl class="health">
+          <div><dt>Lag p50</dt><dd id="h-p50" class="num">&mdash;</dd></div>
+          <div><dt>Lag p99</dt><dd id="h-p99" class="num">&mdash;</dd></div>
+          <div><dt>Gaps today</dt><dd id="h-gaps" class="num">&mdash;</dd></div>
+          <div class="wide"><dt>Capture nodes</dt><dd id="h-nodes" class="nodes">&mdash;</dd></div>
+          <div class="wide">
+            <dt>Quotes used / total</dt>
+            <dd><span id="h-quotes" class="num">&mdash;</span> <span id="h-quotes-pct" class="muted small num"></span></dd>
+            <dd class="meter" aria-hidden="true"><span id="h-quotes-bar"></span></dd>
+          </div>
+        </dl>
+        <p class="muted small">Lag is exchange trade time to snapshot over the last 60 s.</p>
+      </section>
+    </div>
+  </main>
+
+  <footer class="wrap foot">
+    <span class="muted small">GammaPin &middot; Analytics, not trading advice.</span>
+    <button id="theme-btn" type="button" class="theme-btn">Theme: auto</button>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/uplot@1.6.31/dist/uPlot.iife.min.js"></script>
+  <script src="feed.js"></script>
+  <script src="panels.js"></script>
+  <script>
+    (function () {
+      'use strict';
+      var dash = GPPanels.createDashboard(document, window.uPlot || null);
+
+      GPFeed.start({
+        onSnapshot: function (snap, meta) {
+          try { dash.render(snap, meta); }
+          catch (err) { console.error('render failed', err); var e = document.getElementById('st-error'); if (e) e.textContent = 'render error: ' + err.message; }
+        },
+        onStatus: dash.renderStatus
+      });
+      setInterval(dash.tick, 250);
+
+      // Theme: auto -> light -> dark. The chart reads colours from CSS, so rebuild it on change.
+      var btn = document.getElementById('theme-btn');
+      function current() { return document.documentElement.getAttribute('data-theme') || 'auto'; }
+      function label() { btn.textContent = 'Theme: ' + current(); }
+      btn.addEventListener('click', function () {
+        var next = { auto: 'light', light: 'dark', dark: 'auto' }[current()];
+        if (next === 'auto') document.documentElement.removeAttribute('data-theme');
+        else document.documentElement.setAttribute('data-theme', next);
+        try { if (next === 'auto') localStorage.removeItem('gp-theme'); else localStorage.setItem('gp-theme', next); } catch (e) {}
+        label();
+        dash.retheme();
+      });
+      if (window.matchMedia) {
+        var mq = window.matchMedia('(prefers-color-scheme: dark)');
+        var onChange = function () { if (current() === 'auto') dash.retheme(); };
+        if (mq.addEventListener) mq.addEventListener('change', onChange); else if (mq.addListener) mq.addListener(onChange);
+      }
+      label();
+    })();
+  </script>
 </body>
 </html>
