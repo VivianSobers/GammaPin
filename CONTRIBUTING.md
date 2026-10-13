@@ -87,7 +87,7 @@ Start on a Wednesday so day 7 and day 14 are Nifty expiry Tuesdays. See [docs/CA
 | G1.2 | Gamma and vega | ✅ |
 | G1.3 | IV solver: bracketed Newton, Brent fallback, \|price error\| < 1e-8, ≤ 50 iterations | ✅ |
 | G1.4 | Property test: price(σ) → IV → σ within 1e-6, σ ∈ [0.01, 3], T ∈ [1 min, 30 days] | ✅ |
-| G1.5 | Cross-check against `py_vollib` reference values | ❌ |
+| G1.5 | Cross-check against `py_vollib` reference values | ✅ |
 | G1.6 | Time to expiry: trading minutes to 15:30 / (252 × 375), floor 1 minute | ❌ |
 | G1.7 | Forward: median of K + e^{rT}(C_mid − P_mid) over the 3 strikes nearest the money | ❌ |
 | G1.8 | Quote filters: spread, min mid, discounted intrinsic, OTM only, σ range | ❌ |
