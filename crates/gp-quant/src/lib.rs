@@ -11,7 +11,8 @@ pub mod time;
 
 pub use black76::OptType;
 pub use chain::{
-    Analysis, ChainInput, ConventionResult, QuantError, Quote, StrikeRow, Weights, analyze,
+    Analysis, ChainInput, ConventionResult, QuantError, Quote, Smile, StrikeRow, Weights, analyze,
+    smile,
 };
 pub use filter::FilterConfig;
 pub use time::MIN_T_YEARS;
