@@ -165,7 +165,7 @@ Start on a Wednesday so day 7 and day 14 are Nifty expiry Tuesdays. See [docs/CA
 | # | Task | Status |
 |---|---|---|
 | G7.1 | Run H1 and H2 on the test set, **once**, commit the outputs (day 12) | ❌ |
-| G7.2 | `forward_test.py`: write the 14:00 prediction with a SHA-256, and score it after settlement | ❌ |
+| G7.2 | `forward_test.py`: write the 14:00 prediction with a SHA-256, and score it after settlement | ✅ |
 | G7.3 | Publish the 14:00 prediction on expiry 2, before settlement | ❌ |
 | G7.4 | Score the forward test against the settlement | ❌ |
 | G7.5 | Results write-up with confidence intervals, including null results | ❌ |
