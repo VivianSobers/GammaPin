@@ -90,7 +90,7 @@ Start on a Wednesday so day 7 and day 14 are Nifty expiry Tuesdays. See [docs/CA
 | G1.5 | Cross-check against `py_vollib` reference values | ✅ |
 | G1.6 | Time to expiry: trading minutes to 15:30 / (252 × 375), floor 1 minute | ✅ |
 | G1.7 | Forward: median of K + e^{rT}(C_mid − P_mid) over the 3 strikes nearest the money | ✅ |
-| G1.8 | Quote filters: spread, min mid, discounted intrinsic, OTM only, σ range | ❌ |
+| G1.8 | Quote filters: spread, min mid, discounted intrinsic, OTM only, σ range | ✅ |
 | G1.9 | PyO3 + numpy bindings (`maturin develop`) | ❌ |
 
 **🚩 CP-G1:** property and cross-check tests green in CI, `import gp_quant` works. ❌
