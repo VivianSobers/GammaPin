@@ -17,11 +17,4 @@ pub use filter::FilterConfig;
 pub use time::MIN_T_YEARS;
 
 #[cfg(feature = "python")]
-mod python {
-    use pyo3::prelude::*;
-
-    #[pymodule]
-    fn gp_quant(_m: &Bound<'_, PyModule>) -> PyResult<()> {
-        Ok(())
-    }
-}
+mod python;
