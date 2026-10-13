@@ -93,7 +93,7 @@ Start on a Wednesday so day 7 and day 14 are Nifty expiry Tuesdays. See [docs/CA
 | G1.8 | Quote filters: spread, min mid, discounted intrinsic, OTM only, σ range | ✅ |
 | G1.9 | PyO3 + numpy bindings (`maturin develop`) | ✅ |
 
-**🚩 CP-G1:** property and cross-check tests green in CI, `import gp_quant` works. ❌
+**🚩 CP-G1:** property and cross-check tests green in CI, `import gp_quant` works. ✅
 
 ## G2: Historical data (days 1–5, downloads run in the background) · `research/`
 
