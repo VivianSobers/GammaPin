@@ -6,15 +6,14 @@ pub mod chain;
 pub mod filter;
 pub mod iv;
 pub mod norm;
+pub mod time;
 
 pub use black76::OptType;
 pub use chain::{
     Analysis, ChainInput, ConventionResult, QuantError, Quote, StrikeRow, Weights, analyze,
 };
 pub use filter::FilterConfig;
-
-/// Lower bound on time to expiry: one trading minute, in years.
-pub const MIN_T_YEARS: f64 = 1.0 / (252.0 * 375.0);
+pub use time::MIN_T_YEARS;
 
 #[cfg(feature = "python")]
 mod python {
