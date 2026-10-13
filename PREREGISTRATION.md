@@ -9,7 +9,7 @@
 | Item | Value |
 |---|---|
 | Sample | Nifty weekly expiries from the Upstox Expired Instruments API (~50) |
-| Kept contracts | Only those passing the coverage check (`fetch_expired.py` coverage log) |
+| Kept expiries | Only those flagged `complete` by the coverage check (`fetch_expired.py` coverage_summary.csv) |
 | Train / test split | Chronological 70 / 30. Last train expiry: `TBD`. First test expiry: `TBD` |
 | Risk-free rate | RBI 91-day T-bill yield, constant within each day |
 | Participant OI | NSE `fao_participant_oi_DDMMYYYY.csv`, day d used only from day d+1 |
@@ -58,8 +58,8 @@ These are the implementation decisions already in code (`research/`, `crates/gp-
 | Candle timing | A 1-minute candle stamped `ts` (its start, naive IST) is known only from `ts + 1 min`. |
 | Chain as of t | Per contract, the last known close and the last known OI. A close is used only if it is less than 30 minutes old at t (candle start > t − 31 min); otherwise its price counts as missing (0, rejected by the quote filters) while its OI is kept. A side with no known candle has price 0 and OI 0. |
 | Participant OI | Latest NSE file dated strictly before the trading day, index-option columns, in contracts. Error if that file is more than 7 calendar days older than the day. |
-| Risk-free rate | Cut-off yield y (decimal) of the latest RBI 91-day T-bill auction dated on or before the day, constant within the day, converted to r = (365/91)·ln(1 + y·91/365). Source: hand-built CSV `research/cache/tbill_91d.csv`. |
-| Settlement | Official Nifty 50 `Closing Index Value` on the expiry date, from NSE `ind_close_all_DDMMYYYY.csv`. Target only. |
+| Risk-free rate | Cut-off yield y (decimal) of the latest RBI 91-day T-bill auction dated strictly before the day (a same-day result may not be public by 14:00 IST), constant within the day, converted to r = (365/91)·ln(1 + y·91/365). Source: hand-built CSV `research/cache/tbill_91d.csv`. |
+| Settlement | Official Nifty 50 `Closing Index Value` on the expiry date, from NSE `ind_close_all_DDMMYYYY.csv`. Target only. Equals NCL's option settlement price; rule and the 3 Aug 2026 change in [docs/SETTLEMENT.md](docs/SETTLEMENT.md). |
 | Option OI units | Upstox candle OI assumed in units (lot size × contracts) and divided by the lot size (`OI_IN_UNITS = True`). |
 | Fetch window | Expiry − 6 calendar days to expiry, every listed strike (the default; see Open items for `--band-pct`). |
 | Coverage | An expiry is `complete` when both the index candle count and the number of distinct option-candle minutes (union over contracts, on index dates) reach ≥ 95% of 375 × sessions in the index data. |
@@ -82,6 +82,7 @@ These are the implementation decisions already in code (`research/`, `crates/gp-
 
 | Item | Rule |
 |---|---|
+| Sample | Cached expiries flagged `complete` in `coverage_summary.csv` (rule above); the split is computed over these. Without the file the run stops. Excluded counts are reported in the summary JSON (`coverage`) and the CSV has a `coverage_complete` column. `--include-incomplete` keeps every cached expiry, for train diagnostics only; it is recorded in the JSON and refused for the test split. |
 | Decision time | 14:00 IST on the expiry day; the chain uses candles stamped ≤ 13:59. |
 | Inputs | r and S1/S2 weights for the expiry date (rules above). |
 | Max pain | Listed strike in the 14:00 chain minimising Σ_j OI_j^C·max(K − K_j, 0) + OI_j^P·max(K_j − K, 0). Ties → lower strike. Non-finite or negative OI counts as 0. NaN if total OI is 0. |
@@ -100,12 +101,13 @@ Tests, per (S·, baseline) pair (3 × 3), on the expiries where both errors are 
 - **Wilcoxon:** two-sided signed-rank on d; zero differences dropped (`zero_method="wilcox"`); all d = 0 gives statistic 0, p = 1.
 - **Bootstrap:** moving-block bootstrap of mean(d): ⌈n/b⌉ blocks of length b with uniform starts in [0, n − b] (no wrap-around), concatenated and cut to n; 10,000 resamples; 95% percentile CI; seed 20261013 for every comparison. Skipped, with a note, when n < b.
 - **Block length b:** `TBD` above. Until set, the train split uses a provisional 3 with a warning; the test split refuses to run.
-- **Split while `last_train_expiry` is `TBD`:** train = first ⌈0.7·n⌉ cached expiries (provisional, with a warning). The test split refuses to run, and also requires the git tag `prereg-v1`.
+- **Split while `last_train_expiry` is `TBD`:** train = first ⌈0.7·n⌉ complete cached expiries (provisional, with a warning). The test split refuses to run, and also requires the git tag `prereg-v1`.
 
 ### H2 implementation
 
 | Item | Rule |
 |---|---|
+| Sample | As H1: complete cached expiries only, split over these with the same rules (`prereg.expiries_for`). Coverage counts in the report JSON (`coverage`), `coverage_complete` in the features file; `--include-incomplete` for train diagnostics only, refused for the test split. |
 | Bars | 5-minute bars aligned to 09:15 (75 per session). Candles off the minute grid or outside 09:15–15:30 are dropped. |
 | RV | sqrt(Σ squared 1-minute log returns of the candles stamped in the bar). Return = log(close / previous close of the same session); the session's first candle uses log(close / open), so no overnight return. RV is null with fewer than 3 returns. |
 | Target | y = log RV of bar t+1, where t+1 is the next bar index of the same session; otherwise null. Rows with null y are not used for fitting or scoring. |
@@ -118,20 +120,19 @@ Tests, per (S·, baseline) pair (3 × 3), on the expiries where both errors are 
 | Models, per S | Model: const + 3 HAR + 12 tod + dte + flip_dist_S + flip_none_S + gex_z_S. Primary baseline: the same without gex_z_S. Secondary baseline `har_only`: const + HAR + tod + dte. Columns with no variation in the training rows are dropped (if gex_z_S is dropped the run fails). |
 | Estimation | OLS on training rows pooled over expiries and sorted by bar_end; Newey-West HAC (Bartlett), 6 lags. |
 | Score | R²_oos = 1 − SSE_model/SSE_baseline on the evaluation rows. Also reported: the same against `har_only`, and 1 − SSE/SST for each model. |
-| Expiry week | Trading days d with max(expiry − 6 days, previous cached expiry + 1 day) ≤ d ≤ expiry. |
+| Expiry week | Trading days d with max(expiry − 6 days, previous cached expiry + 1 day) ≤ d ≤ expiry. The previous expiry may be incomplete. |
 | Missing inputs | A day without a rate or participant OI is dropped for all conventions (listed in `skipped_days`). |
 | Train split | In-sample fit on all training rows, plus pseudo-OOS: the training expiries with usable rows, in order; the first max(1, ⌊0.7·n⌋) are standardized and fitted, the rest evaluated. Skipped with fewer than 2 expiries. |
-| Test split | Standardize and fit on all training rows, score on the test rows. Requires the git tag `prereg-v1`. |
+| Test split | Standardize and fit on all training rows, score on the test rows. As H1: refuses while `last_train_expiry` is `TBD` and requires the git tag `prereg-v1`. While `TBD`, the train split is the provisional first ⌈0.7·n⌉ with a warning. |
 
 ### Open items
 
-- **Coverage not applied.** Neither the H1 nor the H2 pipeline filters expiries by the coverage `complete` flag, and no per-contract coverage filter exists, so the "Kept contracts" rule in the Data table is not yet implemented.
 - **Sample size.** The Upstox Expiries endpoint lists only about 6 months of history (about 26 weekly expiries), so the ~50 expiries in the Data table may not be reachable.
 - **Option OI units.** `OI_IN_UNITS` is an unverified assumption; check it against NSE bhavcopy OI on the first real data.
 - **Success criteria.** H1 and H2 success criteria are `TBD`.
-- **H2 split guard.** H2 calls `prereg.split` directly, so while `last_train_expiry` is `TBD` it falls back to ⌈0.7·n⌉ in both splits; the test split is guarded only by the `prereg-v1` tag. H1 refuses the test split while it is `TBD`.
+- **Closing Auction Session.** From 3 Aug 2026 the settlement close is formed by the CAS auction price (15:15–15:35) instead of the 15:00–15:30 VWAP, and the sample spans that date ([docs/SETTLEMENT.md](docs/SETTLEMENT.md)). Possible effects: H1 may need a pre/post split or control; T is still measured to 15:30 while F&O trades until 15:40; H2's 15:15–15:30 bucket may show near-zero RV after 3 Aug.
 - **Strike band.** `fetch_expired.py --band-pct` picks strikes with the expiry-eve close, which is after the earlier days H2 uses. Data for H2 must be fetched without it.
-- **Same-day T-bill auction.** `rate_on` uses an auction dated on the day itself; whether its result is published before 14:00 IST is not verified.
+- **Per-contract coverage.** Coverage filters whole expiries; no rule drops individual contracts using `coverage.csv`.
 
 ## Deviations
 
