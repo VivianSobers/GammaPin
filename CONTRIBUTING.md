@@ -145,10 +145,10 @@ Start on a Wednesday so day 7 and day 14 are Nifty expiry Tuesdays. See [docs/CA
 | # | Task | Status |
 |---|---|---|
 | G5.1 | Page shell: banner, WebSocket client, mock mode from `static/mock/snapshot.json` | ✅ |
-| G5.2 | Panels: F and flip, GEX by strike (S0/S1) with uPlot, pin, regime, H1 accuracy, data health | ❌ |
+| G5.2 | Panels: F and flip, GEX by strike (S0/S1) with uPlot, pin, regime, H1 accuracy, data health | ✅ |
 | G5.3 | Point the page at Vivian's live `/ws` (after handoff H4) | ❌ |
 
-**🚩 CP-G5:** dashboard renders every C2 field from the mock feed. ❌
+**🚩 CP-G5:** dashboard renders every C2 field from the mock feed. ✅
 
 ## G6: Validation and model finalization (days 10–11)
 
