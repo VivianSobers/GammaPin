@@ -4,6 +4,7 @@
 pub mod black76;
 pub mod chain;
 pub mod filter;
+pub mod iv;
 pub mod norm;
 
 pub use black76::OptType;
