@@ -81,7 +81,7 @@ The page always shows "Analytics, not trading advice." regardless of the payload
 
 Producer: `gp-quant` (Guru). Consumers: `gp-monitor` live engine (Vivian), `research/` via the Python bindings (Guru).
 
-The types live in [`crates/gp-quant/src/chain.rs`](../crates/gp-quant/src/chain.rs). The signatures are fixed; the bodies arrive in G3.
+The types live in [`crates/gp-quant/src/chain.rs`](../crates/gp-quant/src/chain.rs). The signatures are fixed. `analyze` is implemented (G3.5), so `gp-monitor` can call it directly.
 
 ```rust
 pub struct Quote { pub bid: f64, pub ask: f64, pub oi: f64 }      // oi in contracts; 0.0 when absent

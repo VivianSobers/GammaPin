@@ -1,8 +1,9 @@
 //! Contract C3 (docs/CONTRACTS.md): the chain-level API used by gp-monitor and research.
 
-use crate::black76::OptType;
+use crate::black76::{OptType, gamma};
 use crate::filter::FilterConfig;
 use crate::forward::{ParityPoint, forward};
+use crate::gex::{GammaGrid, gex_by_strike};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct Quote {
@@ -193,8 +194,46 @@ fn fill_gaps(x: &[f64], y: &[f64]) -> Vec<f64> {
 
 /// Forward, smile, gamma and GEX for each convention in `weights`.
 pub fn analyze(input: &ChainInput, weights: &[Weights]) -> Result<Analysis, QuantError> {
-    let _ = (input, weights);
-    todo!("G3.5")
+    let sm = smile(input)?;
+    let (rows, t, r, lot, f) = (
+        input.rows,
+        input.t_years,
+        input.r,
+        input.lot_size,
+        sm.forward,
+    );
+    let gam: Vec<f64> = rows
+        .iter()
+        .zip(&sm.sigma)
+        .map(|(row, &s)| gamma(f, row.strike, t, r, s))
+        .collect();
+    let grid = GammaGrid::new(rows, &sm.sigma, f, t, r, lot);
+    let conventions = weights
+        .iter()
+        .map(|&w| {
+            let gex = gex_by_strike(rows, &gam, w, lot, f);
+            let pin = rows
+                .iter()
+                .zip(&gex)
+                .filter(|(_, g)| **g > 0.0)
+                .max_by(|a, b| a.1.total_cmp(b.1))
+                .map(|(row, _)| row.strike);
+            ConventionResult {
+                net_gex: gex.iter().sum(),
+                flip: grid.flip(w, f),
+                pin,
+                gex,
+            }
+        })
+        .collect();
+    Ok(Analysis {
+        forward: f,
+        iv: sm.iv,
+        gamma: gam,
+        quotes_used: sm.quotes_used,
+        quotes_total: sm.quotes_total,
+        conventions,
+    })
 }
 
 #[cfg(test)]
@@ -294,5 +333,66 @@ mod tests {
         let mut rows = synthetic_rows();
         rows.iter_mut().for_each(|r| r.put = Quote::default());
         assert_eq!(smile(&input(&rows)), Err(QuantError::NoForward));
+    }
+
+    #[test]
+    fn analyze_end_to_end() {
+        let mut rows = synthetic_rows();
+        // call wall at 25,200, put wall at 24,800
+        for row in rows.iter_mut() {
+            if row.strike == 25_200.0 {
+                row.call.oi = 60_000.0;
+            }
+            if row.strike == 24_800.0 {
+                row.put.oi = 60_000.0;
+            }
+        }
+        let flipped = Weights {
+            w_c: -1.0,
+            w_p: 1.0,
+        };
+        let a = analyze(&input(&rows), &[Weights::S0, flipped]).unwrap();
+        assert!((a.forward - F).abs() < 1e-6);
+        assert_eq!(a.conventions.len(), 2);
+        let (s0, neg) = (&a.conventions[0], &a.conventions[1]);
+        assert_eq!(s0.gex.len(), rows.len());
+        assert_eq!(s0.pin, Some(25_200.0));
+        assert!((s0.net_gex + neg.net_gex).abs() < 1e-6 * s0.net_gex.abs());
+        let flip = s0.flip.unwrap();
+        assert!(flip > 24_800.0 && flip < 25_200.0, "{flip}");
+        assert_eq!(neg.flip, s0.flip);
+        assert_eq!(neg.pin, Some(24_800.0));
+        assert!(a.gamma.iter().all(|g| g.is_finite() && *g > 0.0));
+    }
+
+    #[test]
+    fn analyze_candle_mode() {
+        let rows: Vec<StrikeRow> = synthetic_rows()
+            .into_iter()
+            .map(|mut row| {
+                let c = 0.5 * (row.call.bid + row.call.ask);
+                let p = 0.5 * (row.put.bid + row.put.ask);
+                row.call = Quote {
+                    bid: c,
+                    ask: c,
+                    oi: row.call.oi,
+                };
+                row.put = Quote {
+                    bid: p,
+                    ask: p,
+                    oi: row.put.oi,
+                };
+                row
+            })
+            .collect();
+        let mut inp = input(&rows);
+        inp.filter = FilterConfig::CANDLES;
+        let a = analyze(&inp, &[Weights::S0]).unwrap();
+        assert!((a.forward - F).abs() < 1e-6);
+        assert!(
+            a.quotes_used > 12,
+            "candles keep cheap wings: {}",
+            a.quotes_used
+        );
     }
 }

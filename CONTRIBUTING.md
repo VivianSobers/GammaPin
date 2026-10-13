@@ -118,7 +118,7 @@ Start on a Wednesday so day 7 and day 14 are Nifty expiry Tuesdays. See [docs/CA
 | G3.2 | GEX per strike (₹ per 1% move) | ✅ |
 | G3.3 | Flip level on a grid of F ± 3% in 0.05% steps | ✅ |
 | G3.4 | Sign conventions S0, S1, S2 from participant OI | ✅ |
-| G3.5 | `analyze()`: forward, GEX, flip, pin and regime per convention (C3) | ❌ |
+| G3.5 | `analyze()`: forward, GEX, flip, pin and regime per convention (C3) | ✅ |
 | G3.6 | Python bindings for `analyze()` and the S1/S2 weights | ❌ |
 | G3.7 | `criterion` bench: 1,500-contract chain < 5 ms on one core | ❌ |
 
