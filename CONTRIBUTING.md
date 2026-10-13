@@ -107,7 +107,7 @@ Start on a Wednesday so day 7 and day 14 are Nifty expiry Tuesdays. See [docs/CA
 | G2.6 | `rates.py`: RBI 91-day T-bill loader | ✅ |
 | G2.7 | Download the T-bill series from RBI DBIE into `research/cache/` | ❌ |
 | G2.8 | Confirm the settlement method from NSE's official contract specs | ❌ |
-| G2.9 | `settlements.py`: official Nifty 50 close on each expiry day (the H1 target) | ❌ |
+| G2.9 | `settlements.py`: official Nifty 50 close on each expiry day (the H1 target) | ✅ |
 
 **🚩 CP-G2:** expiries on disk with a coverage report; participant OI and rates load. ❌
 
