@@ -1,0 +1,13 @@
+# Values PREREGISTRATION.md marks TBD. Fill every "TBD", commit, tag prereg-v1, then run the test split.
+
+[split]
+train_fraction = 0.7
+last_train_expiry = "TBD"   # YYYY-MM-DD; until set, the train split is the first ceil(0.7 * n) expiries
+
+[bootstrap]
+resamples = 10000
+block_length = "TBD"        # until set, the train split uses a provisional 3
+seed = 20261013
+
+[h1]
+decision_time = "14:00"     # IST, expiry day
