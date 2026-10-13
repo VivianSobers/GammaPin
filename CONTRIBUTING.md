@@ -71,7 +71,7 @@ Start on a Wednesday so day 7 and day 14 are Nifty expiry Tuesdays. See [docs/CA
 | G0.6 | Contract C1: merged event schema | ✅ |
 | G0.7 | Contract C2: snapshot JSON and mock file | ✅ |
 | G0.8 | Contract C3: `gp-quant` API used by `gp-monitor` | ✅ |
-| G0.9 | NSE holiday calendar for the window | ❌ |
+| G0.9 | NSE holiday calendar for the window | ✅ |
 | G0.10 | Novelty check: SSRN, arXiv, GitHub for "Nifty gamma exposure" | ❌ |
 | G0.11 | Upstox account, Plus plan (check price), API app | ❌ |
 | G0.12 | Node C: Ubuntu 24.04, chrony from `ops/chrony.conf`, inbox for A/B segments | ❌ |
