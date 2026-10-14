@@ -29,7 +29,7 @@ Stated approximation: participant OI covers all NSE index options and is not per
 - **Prediction:** at 14:00 IST on expiry day, the strike with the largest positive GEX, under S0, S1 and S2.
 - **Baselines:** max pain; nearest multiple of 100; F at 14:00.
 - **Metric:** |settlement − prediction|.
-- **Tests:** paired Wilcoxon signed-rank; 95% CI for the difference in mean absolute error from 10,000 block-bootstrap resamples (block length `TBD`).
+- **Tests:** paired Wilcoxon signed-rank; 95% CI for the difference in mean absolute error from 10,000 block-bootstrap resamples (block length 3).
 - **Success criterion:** `TBD` (for example, the CI for MAE(S·) − MAE(best baseline) lies entirely below 0).
 
 ## H2: volatility regime
@@ -100,7 +100,7 @@ Tests, per (S·, baseline) pair (3 × 3), on the expiries where both errors are 
 
 - **Wilcoxon:** two-sided signed-rank on d; zero differences dropped (`zero_method="wilcox"`); all d = 0 gives statistic 0, p = 1.
 - **Bootstrap:** moving-block bootstrap of mean(d): ⌈n/b⌉ blocks of length b with uniform starts in [0, n − b] (no wrap-around), concatenated and cut to n; 10,000 resamples; 95% percentile CI; seed 20261013 for every comparison. Skipped, with a note, when n < b.
-- **Block length b:** `TBD` above. Until set, the train split uses a provisional 3 with a warning; the test split refuses to run.
+- **Block length b:** 3 (≈ n^{1/3} for about 30 training expiries; allows dependence between neighbouring weeks).
 - **Split while `last_train_expiry` is `TBD`:** train = first ⌈0.7·n⌉ complete cached expiries (provisional, with a warning). The test split refuses to run, and also requires the git tag `prereg-v1`.
 
 ### H2 implementation

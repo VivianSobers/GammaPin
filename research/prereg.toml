@@ -6,7 +6,7 @@ last_train_expiry = "TBD"   # YYYY-MM-DD; until set, the train split is the firs
 
 [bootstrap]
 resamples = 10000
-block_length = "TBD"        # until set, the train split uses a provisional 3
+block_length = 3
 seed = 20261013
 
 [h1]
