@@ -103,7 +103,7 @@ Start on a Wednesday so day 7 and day 14 are Nifty expiry Tuesdays. See [docs/CA
 | G2.2 | Download 12 months of participant OI | ✅ |
 | G2.3 | `instruments.py`: Nifty option contracts, lot size, tick size from the Upstox instrument master | ✅ |
 | G2.4 | `fetch_expired.py`: expired option and index candles, ≤ 1 month per request, coverage log | ✅ |
-| G2.5 | Run the expired fetch (needs Plus plan and a token) | ❌ |
+| G2.5 | ~~Run the expired fetch (needs Plus plan)~~ Replaced by the free NSE bhavcopy: `bhavcopy.py`, Dec 2024 to Oct 2026 downloaded | ✅ |
 | G2.6 | `rates.py`: RBI 91-day T-bill loader | ✅ |
 | G2.7 | Download the T-bill series from RBI DBIE into `research/cache/` | ❌ |
 | G2.8 | Confirm the settlement method from NSE's official contract specs | ✅ |
@@ -134,9 +134,9 @@ Start on a Wednesday so day 7 and day 14 are Nifty expiry Tuesdays. See [docs/CA
 | G4.3 | H1 pipeline (`h1_pinning.py`) | ✅ |
 | G4.4 | H2 pipeline (`h2_vol.py`): HAR controls, Newey-West (6 lags), out-of-sample R² | ✅ |
 | G4.5 | Look-ahead guards and perturbation test | ✅ |
-| G4.6 | Fill every `TBD` in `PREREGISTRATION.md` (split dates, block length, success criteria) | ❌ |
+| G4.6 | Fill every `TBD` in `PREREGISTRATION.md` (split dates, block length, success criteria) | ✅ |
 | G4.7 | **Freeze:** commit and tag `prereg-v1` before touching the test set | ❌ |
-| G4.8 | Run H1 and H2 on the training set | ❌ |
+| G4.8 | Run H1 (`h1_eod.py`) on the training set; H2 not tested (no free intraday data) | ❌ |
 
 **🚩 CP-G4:** `prereg-v1` tag pushed before any test-set expiry is loaded. ❌
 
