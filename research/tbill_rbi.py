@@ -30,6 +30,7 @@ from participant_oi import HEADERS
 URL = "https://www.rbi.org.in/scripts/BS_PressReleaseDisplay.aspx?prid={prid}"
 PAGES = Path(__file__).resolve().parent / "cache" / "tbill_rbi_pages.csv"
 TITLE = re.compile(r"Date : (\w{3} \d{1,2}, \d{4}) 91-Day, 182-Day and 364-Day T-Bill Auction Result: Cut-off")
+FAILED = "failed"  # fetch gave up; left out of the pages file so a rerun retries it
 YTM_91 = re.compile(r"Implicit Yield at Cut-Off Price ([\d.]+|NIL) \(YTM: ([\d.]+)%\)")
 
 
@@ -59,7 +60,7 @@ def fetch_one(session: requests.Session, prid: int, pause: float) -> tuple[int, 
         except (requests.Timeout, requests.ConnectionError):
             pass
         time.sleep(2.0 * 2**attempt)
-    raise RuntimeError(f"prid {prid}: no response after retries")
+    return prid, FAILED
 
 
 def load_pages(path: Path = PAGES) -> pl.DataFrame:
@@ -69,22 +70,36 @@ def load_pages(path: Path = PAGES) -> pl.DataFrame:
 
 
 def scan(lo: int, hi: int, path: Path = PAGES, workers: int = 4, pause: float = 0.5) -> pl.DataFrame:
-    """Fetch every prid in [lo, hi] not yet in `path`; append results; return all pages."""
+    """Fetch every prid in [lo, hi] not yet in `path`, saving every 250; return all pages.
+
+    Prids that still fail after retries are not saved, so rerunning the same range picks them up.
+    """
     seen = set(load_pages(path)["prid"].to_list())
     todo = [p for p in range(lo, hi + 1) if p not in seen]
-    rows = []
+    rows, failed = [], 0
+
+    def save() -> pl.DataFrame:
+        old = load_pages(path)
+        out = pl.concat([old, pl.DataFrame(rows, schema=old.schema)]).sort("prid")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        out.write_csv(path)
+        rows.clear()
+        return out
+
     with ThreadPoolExecutor(workers) as ex:
         sessions = [requests.Session() for _ in range(workers)]
         for i, (prid, got) in enumerate(ex.map(lambda a: fetch_one(sessions[a[0] % workers], a[1], pause), enumerate(todo))):
-            day, y = got if got else (None, None)
-            rows.append({"prid": prid, "date": day, "yield_pct": y, "auction": got is not None})
+            if got == FAILED:
+                failed += 1
+            else:
+                day, y = got if got else (None, None)
+                rows.append({"prid": prid, "date": day, "yield_pct": y, "auction": got is not None})
             if (i + 1) % 250 == 0:
-                print(f"{i + 1}/{len(todo)}", flush=True)
-    new = pl.DataFrame(rows, schema=load_pages(path).schema)
-    out = pl.concat([load_pages(path), new]).sort("prid")
-    path.parent.mkdir(parents=True, exist_ok=True)
-    out.write_csv(path)
-    return out
+                save()
+                print(f"{i + 1}/{len(todo)} ({failed} failed)", flush=True)
+    if failed:
+        print(f"{failed} prids failed; rerun the same range to retry them", flush=True)
+    return save()
 
 
 def to_rates_csv(pages: pl.DataFrame, path: Path = rates.PATH) -> pl.DataFrame:
