@@ -30,7 +30,11 @@ Stated approximation: participant OI covers all NSE index options and is not per
 - **Baselines:** max pain; nearest multiple of 100; F at 14:00.
 - **Metric:** |settlement − prediction|.
 - **Tests:** paired Wilcoxon signed-rank; 95% CI for the difference in mean absolute error from 10,000 block-bootstrap resamples (block length 3).
-- **Success criterion:** `TBD` (for example, the CI for MAE(S·) − MAE(best baseline) lies entirely below 0).
+- **Success criterion:** for each convention S0, S1, S2 separately, compare against the best baseline, meaning the baseline with the lowest MAE on the same split and the same expiries. Convention S· supports H1 when both hold:
+  1. the 95% block-bootstrap CI for MAE(S·) − MAE(best baseline) lies entirely below 0, and
+  2. the paired Wilcoxon p-value is below 0.05 / 3 (Bonferroni over the three conventions).
+
+  H1 is supported if at least one convention meets both. Comparisons against the other baselines are reported but are not part of the criterion.
 
 ## H2: volatility regime
 
@@ -38,7 +42,11 @@ Stated approximation: participant OI covers all NSE index options and is not per
 - **Controls:** HAR lags of RV, time-of-day dummies, days to expiry, distance to flip level.
 - **Errors:** Newey-West, 6 lags.
 - **Comparison:** out-of-sample R² gain over the HAR baseline for S0, S1, S2.
-- **Success criterion:** `TBD`.
+- **Success criterion:** convention S· supports H2 when both hold:
+  1. the gex_z_S coefficient in the training fit is negative (higher positive GEX, lower next-bar RV) with Newey-West two-sided p < 0.05, and
+  2. the test-split R²_oos against the primary baseline is above 0.
+
+  H2 is supported if at least one convention meets both.
 
 ## Look-ahead guards
 
@@ -129,7 +137,6 @@ Tests, per (S·, baseline) pair (3 × 3), on the expiries where both errors are 
 
 - **Sample size.** The Upstox Expiries endpoint lists only about 6 months of history (about 26 weekly expiries), so the ~50 expiries in the Data table may not be reachable.
 - **Option OI units.** `OI_IN_UNITS` is an unverified assumption; check it against NSE bhavcopy OI on the first real data.
-- **Success criteria.** H1 and H2 success criteria are `TBD`.
 - **Closing Auction Session.** From 3 Aug 2026 the settlement close is formed by the CAS auction price (15:15–15:35) instead of the 15:00–15:30 VWAP, and the sample spans that date ([docs/SETTLEMENT.md](docs/SETTLEMENT.md)). Possible effects: H1 may need a pre/post split or control; T is still measured to 15:30 while F&O trades until 15:40; H2's 15:15–15:30 bucket may show near-zero RV after 3 Aug.
 - **Strike band.** `fetch_expired.py --band-pct` picks strikes with the expiry-eve close, which is after the earlier days H2 uses. Data for H2 must be fetched without it.
 - **Per-contract coverage.** Coverage filters whole expiries; no rule drops individual contracts using `coverage.csv`.
