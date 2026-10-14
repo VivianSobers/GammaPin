@@ -67,6 +67,15 @@ def features(
     """Predictions and diagnostics from the chain as of `decision_ts`. Conventions missing from `weights` are NaN."""
     names = [c for c in CONVENTIONS if c in weights]
     out = gpdata.analyze_at(opts, decision_ts, expiry, r, [tuple(weights[c]) for c in names], trading_days)
+    return predictions(out, gpdata.chain_at(opts, decision_ts), weights)
+
+
+def predictions(out: dict | None, ch: dict, weights: dict[str, tuple[float, float]]) -> dict:
+    """Feature row from one gp_quant.analyze result `out` (None if it failed) and the chain `ch` it ran on.
+
+    `out["conventions"]` follows the order of CONVENTIONS restricted to those in `weights`.
+    """
+    names = [c for c in CONVENTIONS if c in weights]
     row: dict = {"forward": math.nan, "quotes_used": None, "quotes_total": None}
     for c in CONVENTIONS:
         w_c, w_p = weights.get(c, (math.nan, math.nan))
@@ -75,7 +84,6 @@ def features(
         row |= {"forward": float(out["forward"]), "quotes_used": int(out["quotes_used"]), "quotes_total": int(out["quotes_total"])}
         for c, conv in zip(names, out["conventions"]):
             row |= {f"net_gex_{c}": float(conv["net_gex"]), f"flip_{c}": nan_if_none(conv["flip"]), f"pin_{c}": nan_if_none(conv["pin"])}
-    ch = gpdata.chain_at(opts, decision_ts)
     row["max_pain"] = baselines.max_pain(ch.get("strike", []), ch.get("call_oi", []), ch.get("put_oi", []))
     row["nearest_100"] = baselines.nearest_multiple(row["forward"], 100.0)
     row["no_move"] = baselines.no_move(row["forward"])

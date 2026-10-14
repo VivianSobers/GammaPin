@@ -98,6 +98,23 @@ def t_years_at(ts: dt.datetime, expiry: dt.date, trading_days: list[dt.date]) ->
     return gp.t_years(gp.minutes_to_expiry(minute, sessions_after(ts.date(), expiry, trading_days)))
 
 
+def analyze_chain(ch: dict, t: float, r: float, lot: float, weights: list[tuple[float, float]]) -> dict | None:
+    """gp_quant.analyze on a chain of closing prices (keys as `chain_at`). None when no forward or smile exists."""
+    if len(ch.get("strike", [])) == 0:
+        return None
+    try:
+        out = gp.analyze(
+            ch["strike"], ch["call_px"], ch["call_px"], ch["call_oi"],
+            ch["put_px"], ch["put_px"], ch["put_oi"], r, t, lot, weights, candles=True,
+        )
+    except ValueError:
+        return None
+    out["strikes"] = ch["strike"]
+    out["call_oi"] = ch["call_oi"]
+    out["put_oi"] = ch["put_oi"]
+    return out
+
+
 def analyze_at(
     opts: pl.DataFrame,
     ts: dt.datetime,
@@ -110,16 +127,4 @@ def analyze_at(
     ch = chain_at(opts, ts)
     if len(ch.get("strike", [])) == 0:
         return None
-    lot = float(opts["lot_size"][0])
-    t = t_years_at(ts, expiry, trading_days)
-    try:
-        out = gp.analyze(
-            ch["strike"], ch["call_px"], ch["call_px"], ch["call_oi"],
-            ch["put_px"], ch["put_px"], ch["put_oi"], r, t, lot, weights, candles=True,
-        )
-    except ValueError:
-        return None
-    out["strikes"] = ch["strike"]
-    out["call_oi"] = ch["call_oi"]
-    out["put_oi"] = ch["put_oi"]
-    return out
+    return analyze_chain(ch, t_years_at(ts, expiry, trading_days), r, float(opts["lot_size"][0]), weights)
