@@ -1,8 +1,7 @@
 """RBI 91-day T-bill cut-off yield, as a continuously compounded decimal rate for Black-76 discounting.
 
-No machine-downloadable source was found (checked Oct 2026): RBI DBIE (https://data.rbi.org.in/DBIE/)
-is a JavaScript app without a documented download API, and rbi.org.in publishes the auction results as
-press releases and Handbook/WSS tables. So the series is downloaded by hand and saved as a CSV:
+RBI DBIE (https://data.rbi.org.in/DBIE/) has no documented download API, but every weekly auction result is
+an rbi.org.in press release: `tbill_rbi.py` scans them and writes the CSV below. To build it by hand instead:
 
 1. Get the weekly 91-day T-bill auction results: DBIE -> Financial Markets -> Government Securities
    Market -> Treasury bill auctions (91-day), or the Handbook of Statistics on Indian Economy table
