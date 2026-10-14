@@ -11,3 +11,7 @@ seed = 20261013
 
 [h1]
 decision_time = "14:00"     # IST, expiry day
+
+[h1_eod]
+sample_start = "2025-01-01"  # H1 sample: Nifty expiries in [start, end] (h1_eod.sample)
+sample_end = "2026-10-13"

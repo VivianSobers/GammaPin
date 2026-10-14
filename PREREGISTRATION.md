@@ -8,10 +8,10 @@
 
 | Item | Value |
 |---|---|
-| Sample | Nifty weekly expiries from the Upstox Expired Instruments API (~50) |
-| Kept expiries | Only those flagged `complete` by the coverage check (`fetch_expired.py` coverage_summary.csv) |
+| Source | NSE F&O daily bhavcopy (UDiFF), free from nsearchives.nseindia.com (`research/bhavcopy.py`). No broker data. |
+| Sample | Every Nifty option expiry dated 1 Jan 2025 to 13 Oct 2026 that is the nearest listed expiry in some cached bhavcopy and whose eve bhavcopy is cached (`h1_eod.sample`). Chosen from the expiry listings only, before any outcome was computed. |
 | Train / test split | Chronological 70 / 30. Last train expiry: `TBD`. First test expiry: `TBD` |
-| Risk-free rate | RBI 91-day T-bill yield, constant within each day |
+| Risk-free rate | RBI 91-day T-bill yield, latest auction strictly before the eve |
 | Participant OI | NSE `fao_participant_oi_DDMMYYYY.csv`, day d used only from day d+1 |
 
 ## Sign conventions
@@ -24,10 +24,17 @@
 
 Stated approximation: participant OI covers all NSE index options and is not per strike. S1 and S2 spread it evenly across strikes.
 
+## Design change before the freeze (15 Oct 2026)
+
+The first draft used 1-minute option candles from the Upstox Expired Instruments API, which needs the paid Upstox Plus plan. The project runs on free data only, so before any data were downloaded or any result computed:
+
+- **H1** moves to end-of-day chains from the NSE bhavcopy, with the decision at the close of the expiry eve instead of 14:00 on expiry day. The 14:00 design stays in code (`h1_pinning.py`) and is not run.
+- **H2** needs intraday history, which no free source provides, so it is not tested (see H2).
+
 ## H1: pinning
 
-- **Prediction:** at 14:00 IST on expiry day, the strike with the largest positive GEX, under S0, S1 and S2.
-- **Baselines:** max pain; nearest multiple of 100; F at 14:00.
+- **Prediction:** at the close (15:30 IST) of the last trading day before expiry (the eve), the strike with the largest positive GEX, under S0, S1 and S2.
+- **Baselines:** max pain; nearest multiple of 100; F at the eve close.
 - **Metric:** |settlement − prediction|.
 - **Tests:** paired Wilcoxon signed-rank; 95% CI for the difference in mean absolute error from 10,000 block-bootstrap resamples (block length 3).
 - **Success criterion:** for each convention S0, S1, S2 separately, compare against the best baseline, meaning the baseline with the lowest MAE on the same split and the same expiries. Convention S· supports H1 when both hold:
@@ -37,6 +44,8 @@ Stated approximation: participant OI covers all NSE index options and is not per
   H1 is supported if at least one convention meets both. Comparisons against the other baselines are reported but are not part of the criterion.
 
 ## H2: volatility regime
+
+**Not tested in this study.** It needs 5-minute history that only the paid Upstox data provide. The design and criterion below are kept so that a later study with intraday data starts from a fixed plan; running it here would be a dated deviation.
 
 - **Model:** log RV(t+1) on standardized net GEX(t), 5-minute bars.
 - **Controls:** HAR lags of RV, time-of-day dummies, days to expiry, distance to flip level.
@@ -86,7 +95,21 @@ These are the implementation decisions already in code (`research/`, `crates/gp-
 | Flip | Net GEX recomputed at levels F·(1 + 0.0005·i), i = −60…60 (F ± 3% in 0.05% steps), each strike's σ, T and r held fixed (sticky strike). Sign changes between adjacent levels located by linear interpolation (an exact zero at a level also counts); the one nearest F is kept. None if net GEX keeps one sign. |
 | Pin | Strike with the largest positive GEX_K; ties → higher strike. None if no GEX_K > 0. |
 
-### H1 implementation
+### H1 implementation (end-of-day, primary)
+
+| Item | Rule |
+|---|---|
+| Sample | As in Data: nearest listed expiries dated 2025-01-01 to 2026-10-13 with a cached eve bhavcopy (`prereg.toml [h1_eod]`). The split is `prereg.expiries_for` over this sample. |
+| Eve | The last cached bhavcopy day before the expiry. Decision time 15:30 IST on the eve. |
+| Chain | Nifty index-option rows of that expiry in the eve's bhavcopy. Price = `ClsPric` when `TtlTradgVol` > 0, else 0 (rejected by the quote filters). OI in contracts = `OpnIntrst` / `NewBrdLotQty` (bhavcopy OI is in units). Lot = the modal lot size of the expiry's rows. Rows dated after the eve are refused. |
+| Time to expiry | T = trading minutes from 15:30 on the eve to 15:30 on expiry / (252 × 375), i.e. 375 × trading sessions after the eve up to expiry (375 when the expiry is the next session). Sessions = cached bhavcopy days plus the expiry. |
+| Inputs | r and S1/S2 weights for the eve date (files strictly before the eve). |
+| Pricing and GEX | gp-quant candle mode as above, on this chain. |
+| Max pain, nearest 100, no move | As in the intraday table below, from the eve-close chain and F at the eve close. |
+| Status | `no_bhavcopy`, `no_rate`, `no_chain` (no forward or smile), else `ok`. Missing weights keep S0 only (`weights_ok` false). |
+| Outputs | `research/output/h1_eod_{split}.csv` and `_summary.json`. Tests and success criterion as in H1. |
+
+### H1 implementation (intraday 14:00, not run)
 
 | Item | Rule |
 |---|---|
@@ -135,8 +158,8 @@ Tests, per (S·, baseline) pair (3 × 3), on the expiries where both errors are 
 
 ### Open items
 
-- **Sample size.** The Upstox Expiries endpoint lists only about 6 months of history (about 26 weekly expiries), so the ~50 expiries in the Data table may not be reachable.
-- **Option OI units.** `OI_IN_UNITS` is an unverified assumption; check it against NSE bhavcopy OI on the first real data.
+- **Option OI units (intraday design only).** `OI_IN_UNITS` is unverified for Upstox candles. Bhavcopy OI is in units: about 97% of Nifty option rows on 13 Oct 2026 divide by the lot size, and the rest are long-dated contracts under an older lot size.
+- **Close vs decision.** `ClsPric` for options is NSE's closing price (equal to `SttlmPric` on non-expiry days), not the last trade, so the eve chain is a close-period price, not a 15:30 snapshot.
 - **Closing Auction Session.** From 3 Aug 2026 the settlement close is formed by the CAS auction price (15:15–15:35) instead of the 15:00–15:30 VWAP, and the sample spans that date ([docs/SETTLEMENT.md](docs/SETTLEMENT.md)). Possible effects: H1 may need a pre/post split or control; T is still measured to 15:30 while F&O trades until 15:40; H2's 15:15–15:30 bucket may show near-zero RV after 3 Aug.
 - **Strike band.** `fetch_expired.py --band-pct` picks strikes with the expiry-eve close, which is after the earlier days H2 uses. Data for H2 must be fetched without it.
 - **Per-contract coverage.** Coverage filters whole expiries; no rule drops individual contracts using `coverage.csv`.
