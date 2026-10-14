@@ -153,3 +153,44 @@ def test_score_reads_settlements_lazily(tmp_path, monkeypatch):
     ft.predict(snapshot_file(tmp_path), EXPIRY, tmp_path)
     s = json.loads(ft.score(EXPIRY, None, tmp_path).read_text())
     assert s["settlement"] == 25_100.0 and s["abs_error"]["S1"] == 50.0
+
+
+# --- end-of-day design ---------------------------------------------------------------------------
+
+def _eod_payload(created_at, weights_for=None):
+    import test_h1_eod as eod
+
+    b = eod.book()
+    e = dt.date(2026, 10, 13)
+    return ft.build_eod_payload(
+        e, created_at, sorted(b), eod.loader(b), weights_for or eod.weights, lambda d: eod.R, "ab" * 32
+    ), eod.CASES[e]
+
+
+def test_eod_payload_predicts_from_the_eve_and_seals():
+    payload, (eve, f, cw, _, settle) = _eod_payload(dt.datetime(2026, 10, 12, 20, 0, tzinfo=ft.IST))
+    assert payload["eve"] == eve.isoformat() and payload["design"] == "eod"
+    assert payload["conventions"]["S0"]["pin"] == cw
+    assert payload["baselines"]["nearest_100"] == 25_000.0 and payload["baselines"]["max_pain"] is not None
+    assert payload["warnings"] == []
+    record = ft.seal(payload)
+    assert ft.verify_record(record)
+    scored = ft.score_record(record, settle)
+    assert scored["abs_error"]["S0"] == pytest.approx(abs(settle - cw))
+
+
+def test_eod_payload_refuses_after_the_close_and_warns_after_the_open():
+    with pytest.raises(ValueError):
+        _eod_payload(dt.datetime(2026, 10, 13, 15, 30, tzinfo=ft.IST))
+    payload, _ = _eod_payload(dt.datetime(2026, 10, 13, 10, 0, tzinfo=ft.IST))
+    assert payload["warnings"]
+
+
+def test_eod_payload_without_participant_oi_keeps_s0_only():
+    def none(day):
+        raise LookupError(day)
+
+    payload, _ = _eod_payload(dt.datetime(2026, 10, 12, 20, 0, tzinfo=ft.IST), none)
+    assert payload["weights_ok"] is False
+    assert payload["conventions"]["S1"]["pin"] is None and payload["conventions"]["S1"]["weights"] == [None, None]
+    ft.seal(payload)

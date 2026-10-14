@@ -1,10 +1,13 @@
-"""Forward test of H1: publish the 14:00 IST prediction before settlement, then score it.
+"""Forward test of H1: publish the prediction before settlement, then score it.
 
-    predict --snapshot snap.json --expiry YYYY-MM-DD   writes forward/{expiry}.json (+ a copy of the snapshot)
+    predict-eod --expiry YYYY-MM-DD                    end-of-day design (primary): eve-close bhavcopy prediction
+    predict --snapshot snap.json --expiry YYYY-MM-DD   14:00 design: writes forward/{expiry}.json (+ a copy of the snapshot)
     verify forward/{expiry}.json                        recomputes the payload hash
     score --expiry YYYY-MM-DD [--settlement X]          writes forward/{expiry}_score.json
 
-The prediction comes from a C2 monitor snapshot (docs/CONTRACTS.md). The record holds a `payload`
+`predict-eod` uses h1_eod.features on the cached bhavcopy of the expiry eve (the H1 design in
+PREREGISTRATION.md) and records the bhavcopy file's SHA-256; it must run before 15:30 IST on expiry day.
+`predict` uses a C2 monitor snapshot (docs/CONTRACTS.md). The record holds a `payload`
 and `sha256`, the SHA-256 of the payload's canonical JSON (sorted keys, no whitespace, ASCII).
 The public timestamp is the git commit pushed to GitHub before 15:30 IST; posting the hash
 elsewhere adds a second, independent witness.
@@ -86,6 +89,89 @@ def build_payload(snapshot: dict, snapshot_bytes: bytes, expiry: dt.date, create
         "snapshot": {"sha256": sha256_hex(snapshot_bytes), "ts_ms": snapshot["ts_ms"], "source": snapshot.get("source")},
         "created_at_utc": created_at.astimezone(dt.timezone.utc).isoformat(timespec="seconds"),
     }
+
+
+def build_eod_payload(
+    expiry: dt.date,
+    created_at: dt.datetime,
+    days: list[dt.date],
+    load,
+    weights_for,
+    rate_on,
+    source_sha256: str,
+) -> dict:
+    """The end-of-day prediction from the eve's bhavcopy (h1_eod.features), with max pain."""
+    import bhavcopy
+    import h1_eod
+
+    eves = bhavcopy.eves(days, [expiry])
+    if expiry not in eves:
+        raise LookupError(f"no cached bhavcopy before {expiry}")
+    eve = eves[expiry]
+    local = created_at.astimezone(IST)
+    close = dt.datetime.combine(expiry, dt.time(15, 30), IST)
+    if local >= close:
+        raise ValueError(f"created at {local:%Y-%m-%d %H:%M} IST, not before the {expiry} 15:30 close")
+    warnings = []
+    if local >= dt.datetime.combine(expiry, dt.time(9, 15), IST):
+        warnings.append(f"created at {local:%H:%M} IST on expiry day, after the 09:15 open")
+    try:
+        weights, weights_ok = dict(weights_for(eve)), True
+    except LookupError:
+        weights, weights_ok = {"S0": (1.0, -1.0)}, False
+    r = float(rate_on(eve))
+    row = h1_eod.features(load(eve), expiry, eve, r, weights, days)
+    if math.isnan(row["forward"]):
+        raise ValueError(f"no forward or smile in the {eve} bhavcopy for {expiry}")
+
+    def num(x):
+        return None if x is None or (isinstance(x, float) and math.isnan(x)) else float(x)
+
+    return {
+        "hypothesis": "H1",
+        "design": "eod",
+        "underlying": "NIFTY",
+        "expiry": expiry.isoformat(),
+        "eve": eve.isoformat(),
+        "decision_time_ist": dt.datetime.combine(eve, h1_eod.CLOSE, IST).isoformat(),
+        "forward": float(row["forward"]),
+        "r": r,
+        "weights_ok": weights_ok,
+        "conventions": {
+            c: {"pin": num(row[f"pin_{c}"]), "flip": num(row[f"flip_{c}"]), "net_gex": num(row[f"net_gex_{c}"]),
+                "weights": [num(row[f"w_c_{c}"]), num(row[f"w_p_{c}"])]}
+            for c in ("S0", "S1", "S2")
+        },
+        "baselines": {"max_pain": num(row["max_pain"]), "nearest_100": num(row["nearest_100"]), "no_move": num(row["no_move"])},
+        "notes": [],
+        "warnings": warnings,
+        "source": {"bhavcopy": bhavcopy.path_for(eve).name, "sha256": source_sha256},
+        "created_at_utc": created_at.astimezone(dt.timezone.utc).isoformat(timespec="seconds"),
+    }
+
+
+def predict_eod(expiry: dt.date, out: Path = FORWARD, force: bool = False) -> Path:
+    """Write forward/{expiry}.json from the cached eve bhavcopy, participant OI and T-bill rate."""
+    import bhavcopy
+    import participant_oi
+    import rates
+
+    days = bhavcopy.cached_days()
+    eve = bhavcopy.eves(days, [expiry]).get(expiry)
+    if eve is None:
+        raise LookupError(f"no cached bhavcopy before {expiry}")
+    poi, rate_df = participant_oi.load(), rates.load()
+    payload = build_eod_payload(
+        expiry, dt.datetime.now(dt.timezone.utc), days, bhavcopy.load,
+        lambda d: participant_oi.weights_for(d, poi), lambda d: rates.rate_on(d, rate_df),
+        sha256_hex(bhavcopy.path_for(eve).read_bytes()),
+    )
+    path = prediction_path(out, expiry)
+    if path.exists() and not force:
+        raise FileExistsError(f"{path} exists; a published prediction must not be replaced (use --force before publishing only)")
+    out.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(seal(payload), indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return path
 
 
 def seal(payload: dict) -> dict:
@@ -175,6 +261,10 @@ def publish_instructions(files: list[Path], sha: str, expiry: dt.date) -> str:
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
+    e = sub.add_parser("predict-eod", help="write the end-of-day prediction from the eve's cached bhavcopy")
+    e.add_argument("--expiry", type=dt.date.fromisoformat, required=True)
+    e.add_argument("--out", type=Path, default=FORWARD)
+    e.add_argument("--force", action="store_true", help="overwrite an unpublished prediction")
     p = sub.add_parser("predict", help="write the 14:00 prediction from a C2 snapshot")
     p.add_argument("--snapshot", type=Path, required=True)
     p.add_argument("--expiry", type=dt.date.fromisoformat, required=True)
@@ -189,7 +279,14 @@ def main() -> None:
     a = ap.parse_args()
 
     try:
-        if a.cmd == "predict":
+        if a.cmd == "predict-eod":
+            path = predict_eod(a.expiry, a.out, a.force)
+            record = json.loads(path.read_text(encoding="utf-8"))
+            for w in record["payload"]["warnings"]:
+                print(f"WARNING: {w}", file=sys.stderr)
+            print(f"wrote {path}\nsha256 {record['sha256']}\n")
+            print(publish_instructions([path], record["sha256"], a.expiry))
+        elif a.cmd == "predict":
             path = predict(a.snapshot, a.expiry, a.out, a.force)
             record = json.loads(path.read_text(encoding="utf-8"))
             for w in record["payload"]["warnings"]:
