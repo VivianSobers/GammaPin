@@ -2,7 +2,7 @@
 
 [split]
 train_fraction = 0.7
-last_train_expiry = "TBD"   # YYYY-MM-DD; until set, the train split is the first ceil(0.7 * n) expiries
+last_train_expiry = "2026-03-30"  # 66 of the 94 H1 sample expiries (ceil(0.7 * 94)); test from 2026-04-07
 
 [bootstrap]
 resamples = 10000

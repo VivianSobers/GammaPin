@@ -10,7 +10,7 @@
 |---|---|
 | Source | NSE F&O daily bhavcopy (UDiFF), free from nsearchives.nseindia.com (`research/bhavcopy.py`). No broker data. |
 | Sample | Every Nifty option expiry dated 1 Jan 2025 to 13 Oct 2026 that is the nearest listed expiry in some cached bhavcopy and whose eve bhavcopy is cached (`h1_eod.sample`). Chosen from the expiry listings only, before any outcome was computed. |
-| Train / test split | Chronological 70 / 30. Last train expiry: `TBD`. First test expiry: `TBD` |
+| Train / test split | Chronological 70 / 30 over the 94 sample expiries. Last train expiry: 30 Mar 2026 (66 expiries). First test expiry: 7 Apr 2026 (28 expiries). |
 | Risk-free rate | RBI 91-day T-bill yield, latest auction strictly before the eve |
 | Participant OI | NSE `fao_participant_oi_DDMMYYYY.csv`, day d used only from day d+1 |
 
