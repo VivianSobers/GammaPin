@@ -18,12 +18,15 @@ pub const FLUSH_INTERVAL_MS: u64 = 100;
 
 pub mod record;
 pub mod segment;
+pub mod writer;
 
 pub use record::{Invalid, MAX_PAYLOAD, Record, RecordKind, decode, encode_header};
 pub use segment::{
     Recovery, Scan, SegmentFile, list_segments, read_segment, recover_segment, scan,
     segment_file_name,
 };
+
+pub use writer::{Writer, WriterConfig};
 
 use std::path::PathBuf;
 
