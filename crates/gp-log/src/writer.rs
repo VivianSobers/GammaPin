@@ -113,6 +113,10 @@ impl Writer {
     }
 
     /// Push buffered records to the kernel and to disk.
+    ///
+    /// `append` flushes when `flush_interval` has passed, but only when records arrive;
+    /// the owner should also call `flush` on a `flush_interval` timer so a quiet feed
+    /// is still persisted.
     pub fn flush(&mut self) -> Result<(), LogError> {
         if self.poisoned {
             return Err(LogError::Poisoned);
@@ -148,6 +152,15 @@ impl Writer {
     }
 }
 
+impl Drop for Writer {
+    fn drop(&mut self) {
+        if !self.poisoned {
+            let _ = self.file.flush();
+            let _ = self.file.get_ref().sync_data();
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -164,6 +177,20 @@ mod tests {
     fn put(w: &mut Writer, i: u8, len: usize) {
         w.append(RecordKind::RawFrame, 1, i as i64, i as u64, &vec![i; len])
             .unwrap();
+    }
+
+    #[test]
+    fn drop_without_close_persists_records() {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut w, _) = Writer::open(dir.path(), cfg(1 << 20, Duration::from_secs(3600))).unwrap();
+        put(&mut w, 1, 10);
+        drop(w);
+        assert_eq!(
+            read_segment(&dir.path().join(segment_file_name(0)))
+                .unwrap()
+                .len(),
+            1
+        );
     }
 
     #[test]
