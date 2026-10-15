@@ -29,7 +29,10 @@ from participant_oi import HEADERS
 
 URL = "https://www.rbi.org.in/scripts/BS_PressReleaseDisplay.aspx?prid={prid}"
 PAGES = Path(__file__).resolve().parent / "cache" / "tbill_rbi_pages.csv"
-TITLE = re.compile(r"Date : (\w{3} \d{1,2}, \d{4}) 91-Day, 182-Day and 364-Day T-Bill Auction Result: Cut-off")
+# Titles before mid-2025 read "91 days, 182 days and 364 days T-Bill Auction Result: Cut-off".
+TITLE = re.compile(
+    r"Date : (\w{3} \d{1,2}, \d{4}) 91[- ]days?, 182[- ]days? and 364[- ]days? T-Bill Auction Result: Cut-off", re.I
+)
 FAILED = "failed"  # fetch gave up; left out of the pages file so a rerun retries it
 YTM_91 = re.compile(r"Implicit Yield at Cut-Off Price ([\d.]+|NIL) \(YTM: ([\d.]+)%\)")
 

@@ -14,6 +14,14 @@ def test_parse_auction_release_takes_the_91_day_ytm():
     assert tbill_rbi.parse(FIXTURE.read_text(encoding="utf-8")) == (dt.date(2026, 6, 24), 5.2476)
 
 
+def test_parse_older_title_format():
+    page = (
+        "Date : Jan 15, 2025 91 days, 182 days and 364 days T-Bill Auction Result: Cut-off I. T-Bill 91 days "
+        "III. Cut-off Price and Implicit Yield at Cut-Off Price 98.3803 (YTM: 6.6036%) 96.7585 (YTM: 6.7186%)"
+    )
+    assert tbill_rbi.parse(page) == (dt.date(2025, 1, 15), 6.6036)
+
+
 def test_parse_other_release_is_none():
     assert tbill_rbi.parse("<td>Date : Jun 24, 2026</td><td>Money Supply for the fortnight</td>") is None
 

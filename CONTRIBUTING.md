@@ -105,11 +105,11 @@ Start on a Wednesday so day 7 and day 14 are Nifty expiry Tuesdays. See [docs/CA
 | G2.4 | `fetch_expired.py`: expired option and index candles, ≤ 1 month per request, coverage log | ✅ |
 | G2.5 | ~~Run the expired fetch (needs Plus plan)~~ Replaced by the free NSE bhavcopy: `bhavcopy.py`, Dec 2024 to Oct 2026 downloaded | ✅ |
 | G2.6 | `rates.py`: RBI 91-day T-bill loader | ✅ |
-| G2.7 | Download the T-bill series from RBI DBIE into `research/cache/` | ❌ |
+| G2.7 | Download the T-bill series into `research/cache/`: 103 auctions, 3 Oct 2024 to 14 Oct 2026, from RBI press releases (`tbill_rbi.py`) | ✅ |
 | G2.8 | Confirm the settlement method from NSE's official contract specs | ✅ |
 | G2.9 | `settlements.py`: official Nifty 50 close on each expiry day (the H1 target) | ✅ |
 
-**🚩 CP-G2:** expiries on disk with a coverage report; participant OI and rates load. ❌
+**🚩 CP-G2:** expiries on disk with a coverage report; participant OI and rates load. ✅
 
 ## G3: GEX engine (days 3–5) · `crates/gp-quant`
 
