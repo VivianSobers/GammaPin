@@ -136,7 +136,7 @@ Start on a Wednesday so day 7 and day 14 are Nifty expiry Tuesdays. See [docs/CA
 | G4.5 | Look-ahead guards and perturbation test | ✅ |
 | G4.6 | Fill every `TBD` in `PREREGISTRATION.md` (split dates, block length, success criteria) | ✅ |
 | G4.7 | **Freeze:** commit and tag `prereg-v1` before touching the test set | ❌✅ |
-| G4.8 | Run H1 (`h1_eod.py`) on the training set; H2 not tested (no free intraday data) | ❌ |
+| G4.8 | Run H1 (`h1_eod.py`) on the training set; H2 not tested (no free intraday data). [Results](docs/RESULTS_H1_TRAIN.md) | ✅ |
 
 **🚩 CP-G4:** `prereg-v1` tag pushed before any test-set expiry is loaded. ✅
 
