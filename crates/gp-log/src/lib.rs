@@ -16,12 +16,22 @@ pub const HEADER_LEN: usize = 32;
 pub const SEGMENT_BYTES: u64 = 64 * 1024 * 1024;
 pub const FLUSH_INTERVAL_MS: u64 = 100;
 
-#[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum RecordKind {
-    RawFrame = 1,
-    GapStart = 2,
-    GapEnd = 3,
-    Subscribe = 4,
-    TokenReload = 5,
+pub mod record;
+
+pub use record::{Invalid, MAX_PAYLOAD, Record, RecordKind, decode, encode_header};
+
+use std::path::PathBuf;
+
+#[derive(Debug, thiserror::Error)]
+pub enum LogError {
+    #[error("io: {0}")]
+    Io(#[from] std::io::Error),
+    #[error("{path}: invalid record at byte {offset}: {reason:?}")]
+    Corrupt {
+        path: PathBuf,
+        offset: u64,
+        reason: Invalid,
+    },
+    #[error("record of {0} bytes does not fit in a segment")]
+    PayloadTooLarge(usize),
 }
