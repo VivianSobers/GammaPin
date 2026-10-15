@@ -17,8 +17,10 @@ pub const SEGMENT_BYTES: u64 = 64 * 1024 * 1024;
 pub const FLUSH_INTERVAL_MS: u64 = 100;
 
 pub mod record;
+pub mod segment;
 
 pub use record::{Invalid, MAX_PAYLOAD, Record, RecordKind, decode, encode_header};
+pub use segment::{Scan, SegmentFile, list_segments, read_segment, scan, segment_file_name};
 
 use std::path::PathBuf;
 
