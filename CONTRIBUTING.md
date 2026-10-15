@@ -183,7 +183,7 @@ Start on a Wednesday so day 7 and day 14 are Nifty expiry Tuesdays. See [docs/CA
 | V0.1 | Ubuntu 24.04 on Node A and Node B | ❌ |
 | V0.2 | chrony from `ops/chrony.conf` on A and B, offset < 5 ms | ❌ |
 | V0.3 | LAN to Node C; A and B can rsync segments into Node C's inbox | ❌ |
-| V0.4 | `MarketDataFeedV3.proto` downloaded into `proto/` | ❌ |
+| V0.4 | `MarketDataFeedV3.proto` downloaded into `proto/` | ✅ |
 
 **🚩 CP-V0:** both nodes synced and able to reach Node C. ❌
 
