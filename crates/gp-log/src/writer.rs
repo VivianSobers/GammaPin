@@ -42,6 +42,7 @@ fn create_segment(dir: &std::path::Path, index: u32) -> Result<BufWriter<File>, 
         .write(true)
         .create_new(true)
         .open(dir.join(segment_file_name(index)))?;
+    File::open(dir)?.sync_all()?;
     Ok(BufWriter::with_capacity(1 << 20, file))
 }
 
