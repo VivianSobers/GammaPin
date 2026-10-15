@@ -192,7 +192,7 @@ Start on a Wednesday so day 7 and day 14 are Nifty expiry Tuesdays. See [docs/CA
 | # | Task | Status |
 |---|---|---|
 | V1.1 | `gp-log` writer: 32-byte GPL1 header, CRC32C, 64 MiB segments, 100 ms flush | ✅ |
-| V1.2 | `gp-log` reader and crash recovery: truncate at the last valid CRC | ❌ |
+| V1.2 | `gp-log` reader and crash recovery: truncate at the last valid CRC | ✅ |
 | V1.3 | Basic capture running the same day (raw frames only) | ❌ |
 | V1.4 | Instrument list from the instrument master: current + next Nifty weekly, ±10% of forward, ≤ 1,500 | ❌ |
 | V1.5 | `gp-capture` live on Node A (tokio-tungstenite + rustls) | ❌ |
