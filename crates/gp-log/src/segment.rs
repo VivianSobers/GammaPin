@@ -53,6 +53,30 @@ pub fn read_segment(path: &Path) -> Result<Vec<Record>, LogError> {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Recovery {
+    pub records: usize,
+    pub kept_bytes: u64,
+    pub dropped_bytes: u64,
+}
+
+/// Truncate a segment at the end of its last valid record.
+pub fn recover_segment(path: &Path) -> Result<Recovery, LogError> {
+    let buf = fs::read(path)?;
+    let s = scan(&buf);
+    let dropped = (buf.len() - s.valid_len) as u64;
+    if dropped > 0 {
+        let file = fs::OpenOptions::new().write(true).open(path)?;
+        file.set_len(s.valid_len as u64)?;
+        file.sync_all()?;
+    }
+    Ok(Recovery {
+        records: s.records.len(),
+        kept_bytes: s.valid_len as u64,
+        dropped_bytes: dropped,
+    })
+}
+
 pub fn segment_file_name(index: u32) -> String {
     format!("seg-{index:06}.gpl")
 }
@@ -183,5 +207,39 @@ mod tests {
         let got: Vec<(u32, bool)> = segs.iter().map(|s| (s.index, s.compressed)).collect();
         assert_eq!(got, vec![(1, false), (2, true), (10, false)]);
         assert_eq!(segment_file_name(7), "seg-000007.gpl");
+    }
+
+    #[test]
+    fn recovery_truncates_torn_header() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(segment_file_name(0));
+        let good = encode(&[rec(1, 4), rec(2, 4)]);
+        let mut buf = good.clone();
+        buf.extend_from_slice(&encode(&[rec(3, 4)])[..20]); // crash mid-header
+        std::fs::write(&path, &buf).unwrap();
+
+        let r = recover_segment(&path).unwrap();
+        assert_eq!(
+            (r.records, r.kept_bytes, r.dropped_bytes),
+            (2, good.len() as u64, 20)
+        );
+        assert_eq!(std::fs::read(&path).unwrap(), good);
+        assert_eq!(read_segment(&path).unwrap().len(), 2);
+    }
+
+    #[test]
+    fn recovery_of_clean_and_empty_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let clean = dir.path().join(segment_file_name(0));
+        let buf = encode(&[rec(1, 4)]);
+        std::fs::write(&clean, &buf).unwrap();
+        let r = recover_segment(&clean).unwrap();
+        assert_eq!((r.records, r.dropped_bytes), (1, 0));
+        assert_eq!(std::fs::read(&clean).unwrap(), buf);
+
+        let empty = dir.path().join(segment_file_name(1));
+        std::fs::write(&empty, b"").unwrap();
+        let r = recover_segment(&empty).unwrap();
+        assert_eq!((r.records, r.kept_bytes, r.dropped_bytes), (0, 0, 0));
     }
 }

@@ -20,7 +20,10 @@ pub mod record;
 pub mod segment;
 
 pub use record::{Invalid, MAX_PAYLOAD, Record, RecordKind, decode, encode_header};
-pub use segment::{Scan, SegmentFile, list_segments, read_segment, scan, segment_file_name};
+pub use segment::{
+    Recovery, Scan, SegmentFile, list_segments, read_segment, recover_segment, scan,
+    segment_file_name,
+};
 
 use std::path::PathBuf;
 
