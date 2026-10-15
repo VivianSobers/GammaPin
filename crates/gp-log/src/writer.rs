@@ -25,6 +25,8 @@ impl Default for WriterConfig {
     }
 }
 
+/// After any I/O error the writer is poisoned; drop it and call `Writer::open` again,
+/// which recovers the torn tail and starts a new segment.
 pub struct Writer {
     dir: PathBuf,
     cfg: WriterConfig,
@@ -32,6 +34,7 @@ pub struct Writer {
     file: BufWriter<File>,
     seg_len: u64,
     last_flush: Instant,
+    poisoned: bool,
 }
 
 fn create_segment(dir: &std::path::Path, index: u32) -> Result<BufWriter<File>, LogError> {
@@ -69,6 +72,7 @@ impl Writer {
             file,
             seg_len: 0,
             last_flush: Instant::now(),
+            poisoned: false,
         };
         Ok((writer, recovery))
     }
@@ -85,31 +89,51 @@ impl Writer {
         if payload.len() > MAX_PAYLOAD || need as u64 > self.cfg.segment_bytes {
             return Err(LogError::PayloadTooLarge(need));
         }
-        if self.seg_len + need as u64 > self.cfg.segment_bytes {
-            self.rotate()?;
+        if self.poisoned {
+            return Err(LogError::Poisoned);
         }
-        self.file
-            .write_all(&encode_header(kind, conn_id, recv_ns, mono_ns, payload))?;
-        self.file.write_all(payload)?;
-        self.seg_len += need as u64;
-        if self.last_flush.elapsed() >= self.cfg.flush_interval {
-            self.flush()?;
+        let result = (|| {
+            if self.seg_len + need as u64 > self.cfg.segment_bytes {
+                self.rotate()?;
+            }
+            self.file
+                .write_all(&encode_header(kind, conn_id, recv_ns, mono_ns, payload))?;
+            self.file.write_all(payload)?;
+            self.seg_len += need as u64;
+            if self.last_flush.elapsed() >= self.cfg.flush_interval {
+                self.flush()?;
+            }
+            Ok(())
+        })();
+        if result.is_err() {
+            self.poisoned = true;
         }
-        Ok(())
+        result
     }
 
     /// Push buffered records to the kernel and to disk.
     pub fn flush(&mut self) -> Result<(), LogError> {
-        self.file.flush()?;
-        self.file.get_ref().sync_data()?;
-        self.last_flush = Instant::now();
-        Ok(())
+        if self.poisoned {
+            return Err(LogError::Poisoned);
+        }
+        let result = (|| {
+            self.file.flush()?;
+            self.file.get_ref().sync_data()?;
+            self.last_flush = Instant::now();
+            Ok(())
+        })();
+        if result.is_err() {
+            self.poisoned = true;
+        }
+        result
     }
 
     fn rotate(&mut self) -> Result<(), LogError> {
         self.flush()?;
-        self.index += 1;
-        self.file = create_segment(&self.dir, self.index)?;
+        let next = self.index + 1;
+        let file = create_segment(&self.dir, next)?;
+        self.index = next;
+        self.file = file;
         self.seg_len = 0;
         Ok(())
     }
@@ -139,6 +163,40 @@ mod tests {
     fn put(w: &mut Writer, i: u8, len: usize) {
         w.append(RecordKind::RawFrame, 1, i as i64, i as u64, &vec![i; len])
             .unwrap();
+    }
+
+    #[test]
+    fn failed_rotation_poisons_and_keeps_index() {
+        let dir = tempfile::tempdir().unwrap();
+        let rec_len = (HEADER_LEN + 10) as u64;
+        let (mut w, _) = Writer::open(dir.path(), cfg(rec_len, Duration::ZERO)).unwrap();
+        put(&mut w, 1, 10);
+        // A directory squatting on the next segment name makes create_new fail.
+        std::fs::create_dir(dir.path().join(segment_file_name(1))).unwrap();
+        assert!(matches!(
+            w.append(RecordKind::RawFrame, 1, 0, 0, &[0; 10]),
+            Err(LogError::Io(_))
+        ));
+        assert_eq!(w.segment_index(), 0);
+        assert!(matches!(
+            w.append(RecordKind::RawFrame, 1, 0, 0, &[0; 1]),
+            Err(LogError::Poisoned)
+        ));
+        assert!(matches!(w.flush(), Err(LogError::Poisoned)));
+        assert_eq!(
+            read_segment(&dir.path().join(segment_file_name(0)))
+                .unwrap()
+                .len(),
+            1
+        );
+    }
+
+    #[test]
+    fn oversized_payload_does_not_poison() {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut w, _) = Writer::open(dir.path(), cfg(100, Duration::ZERO)).unwrap();
+        assert!(w.append(RecordKind::RawFrame, 1, 0, 0, &[0; 69]).is_err());
+        w.append(RecordKind::RawFrame, 1, 0, 0, &[0; 68]).unwrap();
     }
 
     #[test]

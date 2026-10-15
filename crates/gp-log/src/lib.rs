@@ -42,4 +42,6 @@ pub enum LogError {
     },
     #[error("record of {0} bytes does not fit in a segment")]
     PayloadTooLarge(usize),
+    #[error("writer is poisoned by an earlier I/O error; reopen the log")]
+    Poisoned,
 }
