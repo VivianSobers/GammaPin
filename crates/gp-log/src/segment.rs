@@ -64,6 +64,13 @@ pub struct Recovery {
 pub fn recover_segment(path: &Path) -> Result<Recovery, LogError> {
     let buf = fs::read(path)?;
     let s = scan(&buf);
+    if let Some(reason @ Invalid::UnknownKind(_)) = s.tail {
+        return Err(LogError::Corrupt {
+            path: path.to_path_buf(),
+            offset: s.valid_len as u64,
+            reason,
+        });
+    }
     let dropped = (buf.len() - s.valid_len) as u64;
     if dropped > 0 {
         let file = fs::OpenOptions::new().write(true).open(path)?;
@@ -162,7 +169,7 @@ mod tests {
     }
 
     #[test]
-    fn scan_garbage_len_does_not_allocate() {
+    fn scan_rejects_garbage_len() {
         let mut buf = encode(&[rec(1, 3)]);
         let mut second = encode(&[rec(2, 3)]);
         second[4..8].copy_from_slice(&u32::MAX.to_le_bytes());
@@ -225,6 +232,31 @@ mod tests {
         );
         assert_eq!(std::fs::read(&path).unwrap(), good);
         assert_eq!(read_segment(&path).unwrap().len(), 2);
+    }
+
+    #[test]
+    fn recovery_refuses_to_truncate_unknown_kind() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(segment_file_name(0));
+        let mut buf = encode(&[rec(1, 4)]);
+        let mut unknown = encode(&[rec(2, 4)]);
+        unknown[12] = 200;
+        let crc = crc32c::crc32c_append(
+            crc32c::crc32c(&unknown[12..crate::HEADER_LEN]),
+            &unknown[crate::HEADER_LEN..],
+        );
+        unknown[8..12].copy_from_slice(&crc.to_le_bytes());
+        buf.extend_from_slice(&unknown);
+        std::fs::write(&path, &buf).unwrap();
+
+        match recover_segment(&path) {
+            Err(LogError::Corrupt {
+                reason: Invalid::UnknownKind(200),
+                ..
+            }) => {}
+            other => panic!("expected Corrupt(UnknownKind), got {other:?}"),
+        }
+        assert_eq!(std::fs::read(&path).unwrap(), buf);
     }
 
     #[test]
