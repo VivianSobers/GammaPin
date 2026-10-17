@@ -6,4 +6,5 @@ pub mod coverage;
 pub mod dedup;
 pub mod normalize;
 pub mod parquet;
+pub mod pipeline;
 pub mod read;

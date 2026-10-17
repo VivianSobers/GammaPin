@@ -1206,9 +1206,11 @@ dependencies = [
  "arrow",
  "gp-feed",
  "gp-log",
+ "gp-replay",
  "parquet",
  "prost",
  "serde",
+ "serde_json",
  "tempfile",
  "toml",
 ]
