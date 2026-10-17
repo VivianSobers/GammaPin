@@ -128,6 +128,10 @@ impl<S: EventStream> EventStream for Paced<S> {
     fn position_ms(&self) -> Option<i64> {
         self.inner.position_ms()
     }
+
+    fn take_gaps(&mut self) -> Vec<i64> {
+        self.inner.take_gaps()
+    }
 }
 
 #[cfg(test)]

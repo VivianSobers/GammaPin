@@ -43,6 +43,11 @@ pub trait EventStream: Send {
     fn poll_event(&mut self) -> Result<Poll, StreamError>;
     /// Exchange time the stream has reached, Unix ms (the last event's `ltt_ms`).
     fn position_ms(&self) -> Option<i64>;
+    /// `GAP_START` times (Unix ms) seen since the last call. A replay has none: its gaps
+    /// are in the day's coverage report.
+    fn take_gaps(&mut self) -> Vec<i64> {
+        Vec::new()
+    }
 }
 
 /// A replay log read front to back at full speed.
@@ -162,6 +167,7 @@ mod tests {
         assert_eq!((r.source(), v.source()), (Source::Replay, Source::Live));
         assert_eq!(r.position_ms(), Some(3));
         assert_eq!(r.poll_event().unwrap(), Poll::End);
+        assert!(r.take_gaps().is_empty());
         assert_eq!(Source::Replay.as_str(), "replay");
     }
 }
