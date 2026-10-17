@@ -267,4 +267,45 @@ mod tests {
         assert_eq!(again.health.lag_ms_p99, s.health.lag_ms_p99);
         assert_eq!(eng.events(), evs.len() as u64);
     }
+
+    /// The dashboard's own validator (`static/feed.js`) accepts what the engine produces.
+    /// Skipped when Node.js is not installed.
+    #[test]
+    fn feed_js_accepts_engine_snapshots() {
+        let date = Date::from_ymd(2026, 10, 19);
+        let mut eng = Engine::new(EngineConfig {
+            h1_accuracy: Some(BTreeMap::from([
+                ("S0".into(), Some(Accuracy { mae: 201.6, n: 66 })),
+                ("S1".into(), None),
+            ])),
+            ..EngineConfig::default()
+        });
+        let evs = market_events(date, 5);
+        for e in &evs {
+            eng.on_event(e);
+        }
+        let s = eng.snapshot(evs.last().unwrap().ltt_ms, "live").unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("snapshot.json");
+        std::fs::write(&path, s.to_json()).unwrap();
+        let feed = concat!(env!("CARGO_MANIFEST_DIR"), "/static/feed.js");
+        let script = format!(
+            "const f = require({feed:?}); \
+             const r = f.validateSnapshot(JSON.parse(require('fs').readFileSync({:?}, 'utf8'))); \
+             if (!r.ok) {{ console.error(r.errors.join('\\n')); process.exit(1); }}",
+            path.display().to_string()
+        );
+        match std::process::Command::new("node")
+            .arg("-e")
+            .arg(&script)
+            .output()
+        {
+            Err(_) => eprintln!("node not found; skipping"),
+            Ok(out) => assert!(
+                out.status.success(),
+                "{}",
+                String::from_utf8_lossy(&out.stderr)
+            ),
+        }
+    }
 }
