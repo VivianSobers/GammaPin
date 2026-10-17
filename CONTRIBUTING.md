@@ -301,10 +301,10 @@ From 17 Oct 2026 the Track V column and the live steps above are dropped (see th
 
 | Risk | Plan |
 |---|---|
-| Upstox's Expiries endpoint lists only about **6 months** of past expiries (~26 weeklies, not ~50) | Fetch as early as possible; state the real sample size in the pre-registration |
+| ~~Upstox's Expiries endpoint lists only about 6 months of past expiries~~ | No longer applies: the sample comes from the NSE bhavcopy (94 expiries) |
 | Expiry 1 falls on a holiday | Expiry moves to the previous trading day ([docs/CALENDAR.md](docs/CALENDAR.md)) |
 | Participant OI covers all index options and is not per strike | S1/S2 spread it evenly across strikes; stated in the pre-registration |
-| Intraday OI updates in batches | Treat OI as a step function, record arrival times |
+| ~~Intraday OI updates in batches~~ | No longer applies: no live capture |
 | NSE data licensing | Publish code and statistics only, never raw ticks |
 
 ## How we work
