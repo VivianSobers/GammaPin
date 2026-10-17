@@ -177,7 +177,7 @@ impl Engine {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::snapshot::{NodeState, Regime};
     use gp_feed::Master;
