@@ -65,6 +65,8 @@ pub enum FormatError {
     Table(&'static str),
     #[error("event {0} refers to unknown instrument {1}")]
     Instrument(u64, u32),
+    #[error("events are not in replay order (sort_for_replay)")]
+    Order,
 }
 
 fn kind_code(k: Kind) -> u8 {
@@ -109,8 +111,11 @@ fn encode_event(out: &mut Vec<u8>, inst: u32, e: &Event) {
     debug_assert_eq!(out.len() - start, EVENT_LEN);
 }
 
-/// Encode `events` (already in replay order) as a complete replay log.
+/// Encode `events`, which must already be in replay order, as a complete replay log.
 pub fn encode(events: &[Event]) -> Result<Vec<u8>, FormatError> {
+    if !crate::is_replay_order(events) {
+        return Err(FormatError::Order);
+    }
     let mut index: HashMap<&str, u32> = HashMap::new();
     let mut table = Vec::new();
     let mut n_instruments = 0u32;
@@ -219,6 +224,12 @@ pub(crate) mod tests {
             0
         );
         assert_eq!(b[third + 4], 2);
+    }
+
+    #[test]
+    fn refuses_unordered_events() {
+        let evs = vec![event("a", Kind::Ce, 2, 0, 1), event("b", Kind::Ce, 1, 0, 1)];
+        assert!(matches!(encode(&evs), Err(FormatError::Order)));
     }
 
     #[test]
