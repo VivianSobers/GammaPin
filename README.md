@@ -8,7 +8,7 @@ About 59% of Indian index-options turnover is in same-day-expiry contracts, and 
 - forward-tests it on expiry day with a public, timestamped prediction,
 - runs on free public data only: NSE and RBI files, no broker account.
 
-**Results:** H1 is not supported on the training set (66 expiries) or the test set (28 expiries). See [docs/RESULTS_H1_TRAIN.md](docs/RESULTS_H1_TRAIN.md) and [docs/RESULTS_H1_TEST.md](docs/RESULTS_H1_TEST.md). H2 (volatility regime) is not tested: it needs intraday history that no free source provides.
+**Results:** H1 is not supported on the training set (66 expiries) or the test set (28 expiries). The write-up is [docs/RESULTS.md](docs/RESULTS.md). H2 (volatility regime) is not tested: it needs intraday history that no free source provides.
 
 ## Data
 
