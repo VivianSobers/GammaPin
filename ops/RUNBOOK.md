@@ -69,8 +69,8 @@ static_dir = "../crates/gp-monitor/static"
 |---|---|---|
 | Capture on two nodes | `../$B/gp-capture --config a.toml --now &` and the same with `b.toml` | `inbox/A/$D/seg-000000.gpl` and `inbox/B/…` grow |
 | Monitor, live | `../$B/gp-monitor --config a.toml live` | http://127.0.0.1:8080 shows `LIVE`, both nodes up |
-| Cut a node | Stop B with Ctrl-C for a while, then start it again | Monitor shows B down, then up; B's log has a gap |
-| Merge | Stop the captures, then `../$B/gp-merge --config a.toml --date $D` | Exit 0; `merged/date=$D/coverage.md` lists B's gap and no lost windows |
+| Cut a node | Stop B with Ctrl-C for a while, then start it again | Monitor shows B down after 5 s, then up |
+| Merge | Stop the captures, then `../$B/gp-merge --config a.toml --date $D` | Exit 0; `merged/date=$D/coverage.md` shows B's outage as its longest silence, and no lost window; segments are now `.gpl.zst` |
 | Replay | `../$B/gp-monitor --config a.toml replay --date $D --speed 10x` | The page shows `REPLAY` and the session again |
 | Determinism | `../$B/gp-replay hash merged/date=$D/replay.gpr` twice | Same SHA-256 |
 
