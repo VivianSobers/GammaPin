@@ -8,6 +8,7 @@ license.workspace = true
 [dependencies]
 anyhow.workspace = true
 axum.workspace = true
+clap.workspace = true
 futures-util.workspace = true
 gp-feed.workspace = true
 gp-log.workspace = true
@@ -19,6 +20,7 @@ serde_json.workspace = true
 tokio.workspace = true
 toml.workspace = true
 tracing.workspace = true
+tracing-subscriber.workspace = true
 
 [dev-dependencies]
 prost.workspace = true

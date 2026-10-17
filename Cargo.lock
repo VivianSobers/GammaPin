@@ -1224,6 +1224,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",
+ "clap",
  "futures-util",
  "gp-feed",
  "gp-log",
@@ -1239,6 +1240,7 @@ dependencies = [
  "tokio-tungstenite 0.30.0",
  "toml",
  "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
