@@ -5,7 +5,8 @@ use gp_log::LogError;
 use tokio::sync::watch;
 
 use crate::backoff::Backoff;
-use crate::client::{ConnOpts, End, run_connection, stopped};
+use crate::client::{ConnOpts, End, Outcome, run_connection, stopped};
+use crate::endpoint::Endpoint;
 use crate::recorder::Recorder;
 use crate::subscriber::Subscriber;
 
@@ -16,9 +17,9 @@ pub struct Summary {
     pub gaps: u64,
 }
 
-/// Capture from `url` until `stop` becomes true.
+/// Capture from `endpoint` until `stop` becomes true.
 pub async fn capture(
-    url: &str,
+    endpoint: &Endpoint,
     sub: &mut Subscriber,
     rec: &mut Recorder,
     backoff: &mut Backoff,
@@ -26,8 +27,18 @@ pub async fn capture(
     stop: &mut watch::Receiver<bool>,
 ) -> Result<Summary, LogError> {
     let mut summary = Summary::default();
+    let http = reqwest::Client::builder()
+        .timeout(opts.stall)
+        .build()
+        .expect("TLS backend available");
     while !*stop.borrow() {
-        let out = run_connection(url, sub, rec, opts, stop).await?;
+        let out = match endpoint.url(&http).await {
+            Ok(url) => run_connection(&url, sub, rec, opts, stop).await?,
+            Err(e) => Outcome {
+                end: End::Failed(e),
+                frames: 0,
+            },
+        };
         summary.connections += 1;
         summary.frames += out.frames;
         if out.frames > 0 {
@@ -85,7 +96,7 @@ mod tests {
             flush: Duration::from_millis(20),
         };
         let (tx, mut rx) = watch::channel(false);
-        let url = feed.url();
+        let url = Endpoint::Direct(feed.url());
         let task = tokio::spawn(async move {
             let s = capture(&url, &mut sub, &mut rec, &mut backoff, opts, &mut rx)
                 .await

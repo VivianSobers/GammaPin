@@ -5,6 +5,7 @@ pub mod backoff;
 pub mod capture;
 pub mod client;
 pub mod config;
+pub mod endpoint;
 pub mod mock;
 pub mod recorder;
 pub mod subscriber;
