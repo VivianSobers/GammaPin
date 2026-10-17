@@ -17,7 +17,7 @@ Every live feed for NSE options needs a broker or vendor account, and opening on
 
 | | Guru | Vivian |
 |---|---|---|
-| GitHub | [@guru-bharadwaj20](https://github.com/guru-bharadwaj20) | TBD |
+| GitHub | [@guru-bharadwaj20](https://github.com/guru-bharadwaj20) | [@VivianSobers](https://github.com/VivianSobers) |
 | Hardware | 1× RTX 4500 Ada | 2× RTX 4090 (two machines) |
 | Nodes | **Node C**: merge target, monitor host, research | **Node A** and **Node B**: redundant capture |
 | Owns | `gp-quant` (+ PyO3), `research/`, dashboard page, `PREREGISTRATION.md`, `docs/` | `gp-log`, `gp-capture`, `gp-merge`, `gp-replay`, `gp-monitor` server, `ops/` |
