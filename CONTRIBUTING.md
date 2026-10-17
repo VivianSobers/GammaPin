@@ -146,7 +146,7 @@ From 17 Oct 2026 the Track V column and the live steps above are dropped (see th
 | G4.4 | H2 pipeline (`h2_vol.py`): HAR controls, Newey-West (6 lags), out-of-sample R² | ✅ |
 | G4.5 | Look-ahead guards and perturbation test | ✅ |
 | G4.6 | Fill every `TBD` in `PREREGISTRATION.md` (split dates, block length, success criteria) | ✅ |
-| G4.7 | **Freeze:** commit and tag `prereg-v1` before touching the test set | ❌✅ |
+| G4.7 | **Freeze:** commit and tag `prereg-v1` before touching the test set | ✅ |
 | G4.8 | Run H1 (`h1_eod.py`) on the training set; H2 not tested (no free intraday data). [Results](docs/RESULTS_H1_TRAIN.md) | ✅ |
 
 **🚩 CP-G4:** `prereg-v1` tag pushed before any test-set expiry is loaded. ✅
