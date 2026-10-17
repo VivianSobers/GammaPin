@@ -18,6 +18,7 @@ pub const FLUSH_INTERVAL_MS: u64 = 100;
 
 pub mod record;
 pub mod segment;
+pub mod tail;
 pub mod writer;
 
 pub use record::{Invalid, MAX_PAYLOAD, Record, RecordKind, decode, encode_header};
@@ -26,6 +27,7 @@ pub use segment::{
     recover_segment, scan, segment_bytes, segment_file_name,
 };
 
+pub use tail::{Tail, read_log};
 pub use writer::{Writer, WriterConfig};
 
 use std::path::PathBuf;
