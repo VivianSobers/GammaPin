@@ -22,3 +22,7 @@ gp-capture.workspace = true
 prost.workspace = true
 tempfile.workspace = true
 tokio.workspace = true
+
+[[bench]]
+name = "merge"
+harness = false
