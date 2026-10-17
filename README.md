@@ -19,9 +19,9 @@ About 59% of Indian index-options turnover is in same-day-expiry contracts, and 
 | Index close | NSE `ind_close_all` | Settlement (the target) |
 | 91-day T-bill cut-off | RBI press releases | Risk-free rate |
 
-## Live capture (dropped)
+## Live capture (built, not deployed)
 
-The original plan also captured the live options market on two redundant nodes. Every live NSE feed needs a broker or vendor account with SEBI KYC (Aadhaar, PAN, bank details), so live capture was dropped on 17 Oct 2026 ([CONTRIBUTING.md](CONTRIBUTING.md#scope-change-17-oct-2026-no-live-capture)). The finished `gp-log` crate stays; the other capture crates are stubs. The planned design was:
+The original plan also captured the live options market on two redundant nodes. Every live NSE feed needs a broker or vendor account with SEBI KYC (Aadhaar, PAN, bank details), so live capture was dropped on 17 Oct 2026 ([CONTRIBUTING.md](CONTRIBUTING.md#scope-change-17-oct-2026-no-live-capture)). The capture, merge, replay and monitor systems were still built, and tested against `gp-mockfeed`, a synthetic market on the same V3 protocol: zero frames lost with one node cut for 60 s, replay at 11M events/s, feed-to-dashboard p99 of 156 ms ([docs/SYSTEMS.md](docs/SYSTEMS.md)). No real tick was captured. The design:
 
 ```
             Upstox Market Data Feed V3 (WebSocket, Protobuf)
@@ -47,10 +47,13 @@ The original plan also captured the live options market on two redundant nodes. 
 | `research/` | Data fetchers, H1 and H2, forward test (Python 3.12) |
 | `forward/` | Published forward-test predictions and scores |
 | `PREREGISTRATION.md` | Hypotheses and metrics, frozen before the test set is opened |
-| `crates/gp-log` | GPL1 append-only, CRC-checked segment log (built for the dropped live capture) |
-| `crates/gp-capture`, `gp-merge`, `gp-replay` | Stubs (live capture dropped) |
-| `crates/gp-monitor` | Dashboard page on its mock feed; the live server is not built |
-| `ops/` | Runbook; systemd units and chrony config for the dropped capture nodes |
+| `crates/gp-log` | GPL1 append-only, CRC-checked segment log |
+| `crates/gp-feed` | Upstox V3 protobuf decoder, instrument master, C1 event, synthetic market |
+| `crates/gp-capture` | WebSocket capture to GPL1 with gaps, reconnects and token reload; `gp-mockfeed` |
+| `crates/gp-merge` | Two nodes' logs to de-duplicated C1 Parquet, a replay log and a coverage report |
+| `crates/gp-replay` | Memory-mapped replay log and the stream shared by live and replay |
+| `crates/gp-monitor` | Live/replay engine and `/ws` server (C2), plus the dashboard page |
+| `ops/` | Runbook (forward test, systems dry run); systemd units and chrony config for capture nodes |
 
 ## Quick start
 
