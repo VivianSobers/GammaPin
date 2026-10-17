@@ -85,7 +85,19 @@ impl Tail {
 
     /// Records completed since the last call, possibly across several segments.
     pub fn poll(&mut self) -> Result<Vec<Record>, LogError> {
+        self.poll_inner(false).map(|(r, _)| r)
+    }
+
+    /// Like [`Tail::poll`], but a segment left with a torn tail by a writer crash is skipped
+    /// past instead of failing, keeping the records before the tear. Returns the number of
+    /// bytes skipped.
+    pub fn poll_skipping_torn(&mut self) -> Result<(Vec<Record>, u64), LogError> {
+        self.poll_inner(true)
+    }
+
+    fn poll_inner(&mut self, skip_torn: bool) -> Result<(Vec<Record>, u64), LogError> {
         let mut out = Vec::new();
+        let mut skipped = 0;
         loop {
             let segments = list_segments(&self.dir).or_else(|e| match e {
                 LogError::Io(io) if io.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
@@ -95,7 +107,7 @@ impl Tail {
                 None => (!segments.is_empty()).then_some(0),
                 Some(i) => segments.iter().position(|s| s.index == i),
             }) else {
-                return Ok(out);
+                return Ok((out, skipped));
             };
             let seg = &segments[pos];
             self.index = Some(seg.index);
@@ -106,16 +118,20 @@ impl Tail {
                 // so anything left over here is a torn tail that will never be finished.
                 Some(next) => {
                     if !self.pending.is_empty() {
-                        return Err(LogError::Corrupt {
-                            path: seg.path.clone(),
-                            offset: self.offset - self.pending.len() as u64,
-                            reason: Invalid::Truncated,
-                        });
+                        if !skip_torn {
+                            return Err(LogError::Corrupt {
+                                path: seg.path.clone(),
+                                offset: self.offset - self.pending.len() as u64,
+                                reason: Invalid::Truncated,
+                            });
+                        }
+                        skipped += self.pending.len() as u64;
+                        self.pending.clear();
                     }
                     self.index = Some(next.index);
                     self.offset = 0;
                 }
-                None => return Ok(out),
+                None => return Ok((out, skipped)),
             }
         }
     }
@@ -247,5 +263,26 @@ mod tests {
 
     fn w_last(dir: &Path) -> u32 {
         list_segments(dir).unwrap().last().unwrap().index
+    }
+
+    #[test]
+    fn lenient_poll_keeps_records_before_a_tear() {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut w, _) = Writer::open(dir.path(), cfg(1 << 20)).unwrap();
+        put(&mut w, 1, 10);
+        put(&mut w, 2, 10);
+        w.close().unwrap();
+        let seg0 = dir.path().join(segment_file_name(0));
+        let mut bytes = fs::read(&seg0).unwrap();
+        bytes.extend_from_slice(&[0x31, 0x4C, 0x50]);
+        fs::write(&seg0, &bytes).unwrap();
+        fs::write(dir.path().join(segment_file_name(1)), b"").unwrap();
+
+        assert!(Tail::new(dir.path()).poll().is_err());
+        let mut t = Tail::new(dir.path());
+        let (recs, skipped) = t.poll_skipping_torn().unwrap();
+        assert_eq!(recs.len(), 2);
+        assert_eq!(skipped, 3);
+        assert_eq!(t.segment_index(), Some(1));
     }
 }
