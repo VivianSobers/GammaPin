@@ -6,6 +6,7 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+clap.workspace = true
 crc32c.workspace = true
 gp-feed.workspace = true
 memmap2.workspace = true

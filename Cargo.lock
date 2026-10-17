@@ -869,6 +869,7 @@ dependencies = [
 name = "gp-replay"
 version = "0.1.0"
 dependencies = [
+ "clap",
  "crc32c",
  "gp-feed",
  "memmap2",
