@@ -1204,6 +1204,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "arrow",
+ "clap",
  "gp-feed",
  "gp-log",
  "gp-replay",

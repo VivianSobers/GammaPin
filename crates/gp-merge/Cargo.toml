@@ -7,6 +7,7 @@ license.workspace = true
 
 [dependencies]
 anyhow.workspace = true
+clap.workspace = true
 arrow.workspace = true
 gp-feed.workspace = true
 gp-log.workspace = true
