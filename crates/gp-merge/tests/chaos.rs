@@ -286,9 +286,16 @@ async fn cutting_one_node_loses_nothing() {
     chaos(2, Duration::from_millis(400), Duration::from_millis(300)).await;
 }
 
-/// The long form of the drill: ten 3 s outages over about a minute.
+/// V4.2 as specified: node A's network is cut for 60 s.
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "takes about a minute"]
-async fn chaos_one_minute() {
+async fn sixty_second_cut() {
+    chaos(1, Duration::from_secs(60), Duration::from_secs(3)).await;
+}
+
+/// Many short outages on alternating nodes.
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "takes about a minute"]
+async fn ten_alternating_cuts() {
     chaos(10, Duration::from_secs(3), Duration::from_secs(3)).await;
 }
