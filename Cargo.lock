@@ -1225,6 +1225,8 @@ dependencies = [
  "gp-feed",
  "gp-quant",
  "gp-replay",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
