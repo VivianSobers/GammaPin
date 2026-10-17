@@ -71,10 +71,10 @@ pub fn node_report(log: &NodeLog, decode: DecodeStats) -> NodeReport {
         frame_bytes: log.frame_bytes(),
         first_recv_ns: log.frames.first().map(|f| f.0),
         last_recv_ns: last,
+        // fold from +0.0: an empty f64 sum is -0.0, which prints as "-0.0"
         gap_ms: gaps
             .iter()
-            .map(|g| (g.end_ns - g.start_ns) as f64 / 1e6)
-            .sum(),
+            .fold(0.0, |acc, g| acc + (g.end_ns - g.start_ns) as f64 / 1e6),
         gaps,
         longest_silence_ms: log.longest_silence_ns() as f64 / 1e6,
         subscribes: log.subscribes,
@@ -260,5 +260,20 @@ mod tests {
         assert!(md.contains("| B | absent |"));
         assert!(md.contains("Lost windows"));
         assert!(md.contains("Node A gaps"));
+    }
+
+    #[test]
+    fn no_gaps_is_plain_zero() {
+        let a = node("A", vec![], vec![50, 60]);
+        assert!(a.gap_ms.is_sign_positive());
+        let c = Coverage {
+            date: "2026-10-19".into(),
+            nodes: vec![a],
+            dedup: DedupStats::default(),
+            partitions: PartitionStats::default(),
+            replay_events: 0,
+            lost: vec![],
+        };
+        assert!(!c.markdown().contains("-0.0"));
     }
 }

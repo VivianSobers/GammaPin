@@ -2,9 +2,11 @@
 
 All times IST.
 
-Live capture was dropped on 17 Oct 2026 ([CONTRIBUTING.md](../CONTRIBUTING.md#scope-change-17-oct-2026-no-live-capture)): every live NSE feed needs a broker account with SEBI KYC. There is no daily capture, token or node routine. The systemd units and `chrony.conf` in this directory belong to that dropped design; the earlier capture runbook is in git history.
+Live capture was dropped on 17 Oct 2026 ([CONTRIBUTING.md](../CONTRIBUTING.md#scope-change-17-oct-2026-no-live-capture)): every live NSE feed needs a broker account with SEBI KYC. There is no daily capture, token or node routine.
 
-What remains is the H1 forward test on Nifty expiry days, from free NSE files only.
+The capture, merge, replay and monitor binaries are built and tested on a synthetic feed ([docs/SYSTEMS.md](../docs/SYSTEMS.md)). [Systems](#systems-built-not-deployed) below shows how to run them, on the mock feed today or on Upstox with an account. The systemd units and `chrony.conf` in this directory are for that deployment.
+
+The routine in use is the H1 forward test on Nifty expiry days, from free NSE files only.
 
 ## Expiry eve (the trading day before a Nifty expiry)
 
@@ -31,3 +33,61 @@ Full procedure: [forward/README.md](../forward/README.md).
 | NSE blocks the download (403) | Retry later with the default `--pause`; do not hammer the site |
 | `predict-eod` picked an older eve | Download the missing bhavcopy, rerun with `--force` (only before publishing) |
 | Prediction not pushed by 15:30 | Do not publish it late. Record the miss in the results write-up |
+
+## Systems (built, not deployed)
+
+### Dry run on the mock feed
+
+No account needed. Everything runs on one machine against `gp-mockfeed`, a synthetic Nifty market on the Upstox V3 protocol.
+
+```bash
+cargo build --release
+B=target/release; D=$(TZ=Asia/Kolkata date +%F)
+mkdir -p dry && cd dry
+../$B/gp-mockfeed --date $D --master NSE.json --now &  # ws://127.0.0.1:9100
+```
+
+Write `a.toml` (and `b.toml` with `name = "B"`):
+
+```toml
+[node]
+name = "A"
+data_dir = "inbox"                 # segments in inbox/A/{date}/
+[capture]
+feed_url = "ws://127.0.0.1:9100"
+master_path = "NSE.json"
+[merge]
+inbox = "inbox"
+out = "merged"
+master_path = "NSE.json"
+[monitor]
+bind = "127.0.0.1:8080"
+static_dir = "../crates/gp-monitor/static"
+```
+
+| Step | Command | Check |
+|---|---|---|
+| Capture on two nodes | `../$B/gp-capture --config a.toml --now &` and the same with `b.toml` | `inbox/A/$D/seg-000000.gpl` and `inbox/B/…` grow |
+| Monitor, live | `../$B/gp-monitor --config a.toml live` | http://127.0.0.1:8080 shows `LIVE`, both nodes up |
+| Cut a node | Stop B with Ctrl-C for a while, then start it again | Monitor shows B down, then up; B's log has a gap |
+| Merge | Stop the captures, then `../$B/gp-merge --config a.toml --date $D` | Exit 0; `merged/date=$D/coverage.md` lists B's gap and no lost windows |
+| Replay | `../$B/gp-monitor --config a.toml replay --date $D --speed 10x` | The page shows `REPLAY` and the session again |
+| Determinism | `../$B/gp-replay hash merged/date=$D/replay.gpr` twice | Same SHA-256 |
+
+### With an Upstox account (if one is ever opened)
+
+| Time | Node | Step | Check |
+|---|---|---|---|
+| 08:45 | C | Log in, write the day's token to `/etc/gammapin/upstox.token` on A and B | `gp-capture check-token` exits 0 on both |
+| 08:55 | A, B | `gp-capture.timer` starts capture (window 09:00–15:40) | `journalctl -u gp-capture` shows the subscription |
+| 08:58 | C | `gp-monitor.timer` starts the live monitor | Page shows `LIVE`, nodes A and B up |
+| 09:05 | A, B | `gp-token-check.timer` | Fails (and alerts) when no token from today exists |
+| 15:40– | A, B | rsync the day's segments into Node C's inbox | Sizes match on both sides |
+| 15:50 | C | `gp-merge.timer` | Exit 0; exit 3 means a window no node captured: read `coverage.md` |
+
+| Symptom | Action |
+|---|---|
+| Monitor shows a node down | Check that node's capture: `journalctl -u gp-capture`. The other node keeps coverage; nothing is lost unless both are down |
+| `gp-merge` exits 3 | Some window was missed by both nodes. It is listed under `lost` in `coverage.json`; note it in the results |
+| `gp-merge` fails on a torn segment | The copy to the inbox is incomplete: rsync again. Capture itself recovers torn tails on restart |
+| Token expired mid-day | Write the new token; capture reloads it on the next reconnect and logs `TOKEN_RELOAD` |
