@@ -414,7 +414,9 @@ version = "0.1.0"
 dependencies = [
  "gp-feed",
  "gp-log",
+ "libc",
  "serde",
+ "tempfile",
  "thiserror",
  "toml",
 ]
