@@ -2,9 +2,11 @@
 //! at 1x, Nx or full speed. Same input, byte-identical output.
 
 pub mod format;
+pub mod order;
 pub mod reader;
 
 pub use format::{FormatError, Meta, write_replay};
+pub use order::{is_replay_order, sort_for_replay};
 pub use reader::{ReplayFile, Tick};
 
 /// Replay speed.
