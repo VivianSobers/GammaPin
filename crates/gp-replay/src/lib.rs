@@ -1,12 +1,14 @@
 //! gp-replay: replay merged events ordered by (ltt_ms, recv_ns, node, seq)
 //! at 1x, Nx or full speed. Same input, byte-identical output.
 
+pub mod digest;
 pub mod format;
 pub mod order;
 pub mod pace;
 pub mod reader;
 pub mod stream;
 
+pub use digest::stream_digest;
 pub use format::{FormatError, Meta, write_replay};
 pub use order::{is_replay_order, sort_for_replay};
 pub use pace::{Clock, ManualClock, Paced, SystemClock};
