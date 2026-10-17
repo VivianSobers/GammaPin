@@ -5,6 +5,7 @@ pub mod decode;
 pub mod event;
 pub mod instruments;
 pub mod select;
+pub mod synth;
 
 pub use date::Date;
 pub use decode::{DEPTH, Update, decode_frame, updates};
