@@ -9,3 +9,5 @@ license.workspace = true
 gp-feed.workspace = true
 gp-replay.workspace = true
 gp-quant.workspace = true
+serde.workspace = true
+serde_json.workspace = true
