@@ -4,10 +4,12 @@
 pub mod format;
 pub mod order;
 pub mod reader;
+pub mod stream;
 
 pub use format::{FormatError, Meta, write_replay};
 pub use order::{is_replay_order, sort_for_replay};
 pub use reader::{ReplayFile, Tick};
+pub use stream::{EventStream, Poll, ReplayStream, Source, StreamError, VecStream, collect};
 
 /// Replay speed.
 #[derive(Debug, Clone, Copy, PartialEq)]
