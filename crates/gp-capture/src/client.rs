@@ -3,6 +3,7 @@
 use std::time::Duration;
 
 use futures_util::{SinkExt, StreamExt};
+use gp_feed::proto::Type;
 use gp_log::LogError;
 use tokio::sync::watch;
 use tokio_tungstenite::tungstenite::Message;
@@ -56,6 +57,12 @@ pub async fn stopped(stop: &mut watch::Receiver<bool>) {
     let _ = stop.wait_for(|s| *s).await;
 }
 
+/// Whether a frame carries market data. The `market_info` greeting does not: it arrives
+/// before the subscription takes effect, so it cannot close a gap.
+pub fn carries_data(payload: &[u8]) -> bool {
+    gp_feed::decode_frame(payload).is_ok_and(|f| f.r#type != Type::MarketInfo as i32)
+}
+
 /// How a connection went.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Outcome {
@@ -66,7 +73,8 @@ pub struct Outcome {
 
 /// Run one connection to `url` until it ends or `stop` becomes true.
 ///
-/// Frames are written before they are looked at. The first data frame closes an open gap.
+/// Frames are written before they are looked at. The first market-data frame closes an open
+/// gap.
 pub async fn run_connection(
     url: &str,
     sub: &mut Subscriber,
@@ -114,7 +122,9 @@ pub async fn run_connection(
                     Some(Ok(_)) => continue, // ping/pong: alive, nothing to record
                 };
                 rec.raw_frame(&payload)?;
-                rec.gap_end()?;
+                if rec.in_gap() && carries_data(&payload) {
+                    rec.gap_end()?;
+                }
                 frames += 1;
                 for req in sub.on_frame(&payload) {
                     rec.subscribe(&req)?;
@@ -228,5 +238,20 @@ mod tests {
             .await
             .unwrap();
         assert!(matches!(refused.end, End::Failed(_)));
+    }
+
+    #[test]
+    fn only_data_frames_close_a_gap() {
+        use gp_feed::proto::FeedResponse;
+        use prost::Message as _;
+        let info = FeedResponse {
+            r#type: Type::MarketInfo as i32,
+            ..Default::default()
+        };
+        assert!(!carries_data(&info.encode_to_vec()));
+        assert!(!carries_data(&[0xFF; 4]));
+        let (mcfg, _) = setup(5);
+        let mut m = gp_feed::synth::Market::new(mcfg.market, mcfg.instruments);
+        assert!(carries_data(&m.next_frame().encode_to_vec()));
     }
 }
