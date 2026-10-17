@@ -843,7 +843,11 @@ dependencies = [
 name = "gp-merge"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "gp-feed",
  "gp-log",
+ "serde",
+ "toml",
 ]
 
 [[package]]
