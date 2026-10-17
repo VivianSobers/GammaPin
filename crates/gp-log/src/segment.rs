@@ -39,9 +39,26 @@ pub fn scan(buf: &[u8]) -> Scan {
     }
 }
 
-/// Read every record of a closed segment. Any invalid byte is an error.
-pub fn read_segment(path: &Path) -> Result<Vec<Record>, LogError> {
+/// zstd level for closed segments: fast to write, about 4x smaller on feed frames.
+pub const ZSTD_LEVEL: i32 = 3;
+
+fn is_compressed(path: &Path) -> bool {
+    path.to_str().is_some_and(|p| p.ends_with(".gpl.zst"))
+}
+
+/// The raw bytes of a segment, decompressing a `.gpl.zst` file.
+pub fn segment_bytes(path: &Path) -> Result<Vec<u8>, LogError> {
     let buf = fs::read(path)?;
+    if is_compressed(path) {
+        Ok(zstd::decode_all(&buf[..])?)
+    } else {
+        Ok(buf)
+    }
+}
+
+/// Read every record of a closed segment, compressed or not. Any invalid byte is an error.
+pub fn read_segment(path: &Path) -> Result<Vec<Record>, LogError> {
+    let buf = segment_bytes(path)?;
     let s = scan(&buf);
     match s.tail {
         None => Ok(s.records),
@@ -86,6 +103,46 @@ pub fn recover_segment(path: &Path) -> Result<Recovery, LogError> {
 
 pub fn segment_file_name(index: u32) -> String {
     format!("seg-{index:06}.gpl")
+}
+
+fn sync_dir(dir: &Path) -> Result<(), LogError> {
+    fs::File::open(dir)?.sync_all()?;
+    Ok(())
+}
+
+/// Compress a closed segment to `seg-NNNNNN.gpl.zst` and remove the original.
+///
+/// The segment is validated first, so a torn file is never compressed. The new file is
+/// written under a temporary name and renamed, so a crash leaves either the original or
+/// both files, never a partial `.gpl.zst`.
+pub fn compress_segment(path: &Path) -> Result<PathBuf, LogError> {
+    let buf = fs::read(path)?;
+    let s = scan(&buf);
+    if let Some(reason) = s.tail {
+        return Err(LogError::Corrupt {
+            path: path.to_path_buf(),
+            offset: s.valid_len as u64,
+            reason,
+        });
+    }
+    let dir = path.parent().unwrap_or(Path::new("."));
+    let mut name = path.file_name().unwrap_or_default().to_os_string();
+    name.push(".zst");
+    let out = dir.join(&name);
+    let mut tmp_name = name;
+    tmp_name.push(".tmp");
+    let tmp = dir.join(tmp_name);
+    let compressed = zstd::encode_all(&buf[..], ZSTD_LEVEL)?;
+    {
+        let mut f = fs::File::create(&tmp)?;
+        std::io::Write::write_all(&mut f, &compressed)?;
+        f.sync_all()?;
+    }
+    fs::rename(&tmp, &out)?;
+    sync_dir(dir)?;
+    fs::remove_file(path)?;
+    sync_dir(dir)?;
+    Ok(out)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -177,6 +234,40 @@ mod tests {
         let s = scan(&buf);
         assert_eq!(s.records.len(), 1);
         assert_eq!(s.tail, Some(Invalid::TooLong));
+    }
+
+    #[test]
+    fn compress_round_trip() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(segment_file_name(4));
+        let recs = vec![rec(1, 300), rec(2, 0), rec(3, 1000)];
+        std::fs::write(&path, encode(&recs)).unwrap();
+
+        let out = compress_segment(&path).unwrap();
+        assert_eq!(out, dir.path().join("seg-000004.gpl.zst"));
+        assert!(!path.exists());
+        assert!(std::fs::metadata(&out).unwrap().len() < encode(&recs).len() as u64);
+        assert_eq!(read_segment(&out).unwrap(), recs);
+
+        let listed = list_segments(dir.path()).unwrap();
+        assert_eq!(listed.len(), 1);
+        assert!(listed[0].compressed);
+        assert_eq!(listed[0].index, 4);
+    }
+
+    #[test]
+    fn compress_refuses_torn_segment() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(segment_file_name(0));
+        let mut buf = encode(&[rec(1, 3)]);
+        buf.extend_from_slice(&[0x47; 7]);
+        std::fs::write(&path, &buf).unwrap();
+        assert!(matches!(
+            compress_segment(&path),
+            Err(LogError::Corrupt { offset, .. }) if offset == (buf.len() - 7) as u64
+        ));
+        assert!(path.exists());
+        assert_eq!(list_segments(dir.path()).unwrap().len(), 1);
     }
 
     #[test]

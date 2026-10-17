@@ -22,8 +22,8 @@ pub mod writer;
 
 pub use record::{Invalid, MAX_PAYLOAD, Record, RecordKind, decode, encode_header};
 pub use segment::{
-    Recovery, Scan, SegmentFile, list_segments, read_segment, recover_segment, scan,
-    segment_file_name,
+    Recovery, Scan, SegmentFile, ZSTD_LEVEL, compress_segment, list_segments, read_segment,
+    recover_segment, scan, segment_bytes, segment_file_name,
 };
 
 pub use writer::{Writer, WriterConfig};
