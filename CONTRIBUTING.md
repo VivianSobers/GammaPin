@@ -2,7 +2,16 @@
 
 Two people, three machines, 14 days, two Nifty expiries. This file is the plan and the tracker. Flip a status in the same commit that finishes the task.
 
-**Legend:** ✅ done · ❌ not done · 🚩 checkpoint
+**Legend:** ✅ done · ❌ not done · ➖ dropped · 🚩 checkpoint
+
+## Scope change (17 Oct 2026): no live capture
+
+Every live feed for NSE options needs a broker or vendor account, and opening one means handing over Aadhaar, PAN and bank details under SEBI KYC. The project already runs its research on free public data only (see "Design change before the freeze" in [PREREGISTRATION.md](PREREGISTRATION.md)), so live capture is dropped too:
+
+- **Track V is dropped** except the finished `gp-log` work (V0.4, V1.1, V1.2), which stays in the repo. `gp-capture`, `gp-merge`, `gp-replay` and `gp-monitor` stay as stubs.
+- **Track G loses the steps that need live ticks:** G0.11, G0.12, G5.3 and G6.2, and handoffs H3, H4 and H5. The dashboard keeps running on its mock feed.
+- **The forward test uses the end-of-day design** (`forward_test.py predict-eod`) from the free NSE bhavcopy instead of a 14:00 snapshot from the live monitor (G7.3).
+- **No pre-registered rule changes.** H1 already uses the bhavcopy, and H2 was already not tested.
 
 ## Team and hardware
 
@@ -28,9 +37,9 @@ The project runs as **two independent tracks**. Every phase belongs to one perso
 |---|---|---|---|---|---|
 | H1 | Contracts C1, C2, C3 | Guru → Vivian | Day 0 | Day 4 | n/a |
 | H2 | `gp_quant::analyze` (C3) implemented | Guru → Vivian | Day 4 | Day 8 | Signature from C3 |
-| H3 | Merged expiry-1 Parquet (C1) | Vivian → Guru | Day 7 evening | Day 10 | Synthetic C1 fixtures in tests |
-| H4 | `gp-monitor` serving `/ws` (C2) | Vivian → Guru | Day 9 | Day 13 | `static/mock/snapshot.json` |
-| H5 | Daily Upstox token | Guru (account holder) → Nodes A, B | 08:45 daily | 09:00 daily | Token sync built by Vivian in V1 |
+| H3 | Merged expiry-1 Parquet (C1) (➖ dropped) | Vivian → Guru | Day 7 evening | Day 10 | Synthetic C1 fixtures in tests |
+| H4 | `gp-monitor` serving `/ws` (C2) (➖ dropped) | Vivian → Guru | Day 9 | Day 13 | `static/mock/snapshot.json` |
+| H5 | Daily Upstox token (➖ dropped) | Guru (account holder) → Nodes A, B | 08:45 daily | 09:00 daily | Token sync built by Vivian in V1 |
 
 ## Timeline
 
@@ -53,6 +62,8 @@ Start on a Wednesday so day 7 and day 14 are Nifty expiry Tuesdays. See [docs/CA
 | 14 Tue | ⚡ Nifty expiry 2 | G7 live forward test | V7 capture |
 | After | | G7 results write-up | V7 demo replay, systems write-up |
 
+From 17 Oct 2026 the Track V column and the live steps above are dropped (see the scope change at the top).
+
 **Joint, but not blocking:** the code freeze tag `freeze-v1` (day 12), inviting finance club users (day 10–11), and the open-source release.
 
 ---
@@ -73,11 +84,11 @@ Start on a Wednesday so day 7 and day 14 are Nifty expiry Tuesdays. See [docs/CA
 | G0.8 | Contract C3: `gp-quant` API used by `gp-monitor` | ✅ |
 | G0.9 | NSE holiday calendar for the window | ✅ |
 | G0.10 | Novelty check: SSRN, arXiv, GitHub for "Nifty gamma exposure" | ✅ |
-| G0.11 | Upstox account, Plus plan (check price), API app | ❌ |
-| G0.12 | Node C: Ubuntu 24.04, chrony from `ops/chrony.conf`, inbox for A/B segments | ❌ |
+| G0.11 | ~~Upstox account, Plus plan (check price), API app~~ Dropped: no live feed (scope change) | ➖ |
+| G0.12 | ~~Node C: Ubuntu 24.04, chrony from `ops/chrony.conf`, inbox for A/B segments~~ Dropped: no capture nodes | ➖ |
 | G0.13 | Add Vivian as collaborator, branch protection on `main` | ❌ |
 
-**🚩 CP-G0:** contracts merged, one manual Upstox token obtained. ❌
+**🚩 CP-G0:** contracts merged (the Upstox token step is dropped). ❌
 
 ## G1: Pricing core (days 1–3) · `crates/gp-quant`
 
@@ -146,7 +157,7 @@ Start on a Wednesday so day 7 and day 14 are Nifty expiry Tuesdays. See [docs/CA
 |---|---|---|
 | G5.1 | Page shell: banner, WebSocket client, mock mode from `static/mock/snapshot.json` | ✅ |
 | G5.2 | Panels: F and flip, GEX by strike (S0/S1) with uPlot, pin, regime, H1 accuracy, data health | ✅ |
-| G5.3 | Point the page at Vivian's live `/ws` (after handoff H4) | ❌ |
+| G5.3 | ~~Point the page at Vivian's live `/ws` (after handoff H4)~~ Dropped: no live feed | ➖ |
 
 **🚩 CP-G5:** dashboard renders every C2 field from the mock feed. ✅
 
@@ -155,10 +166,10 @@ Start on a Wednesday so day 7 and day 14 are Nifty expiry Tuesdays. See [docs/CA
 | # | Task | Status |
 |---|---|---|
 | G6.1 | `validate_ticks.py`: tick-derived vs candle-derived GEX, flip and pin | ✅ |
-| G6.2 | Run the validation on expiry 1 (after handoff H3), commit the report | ❌ |
+| G6.2 | ~~Run the validation on expiry 1 (after handoff H3), commit the report~~ Dropped: no ticks to validate | ➖ |
 | G6.3 | Finalize the models (training set only). [Final models](docs/MODELS_FINAL.md) | ✅ |
 
-**🚩 CP-G6:** validation report committed. ❌
+**🚩 CP-G6:** ~~validation report committed~~ dropped with G6.2. ➖
 
 ## G7: Test set, forward test, write-up (day 12 onward)
 
@@ -166,7 +177,7 @@ Start on a Wednesday so day 7 and day 14 are Nifty expiry Tuesdays. See [docs/CA
 |---|---|---|
 | G7.1 | Run H1 on the test set, **once**, commit the outputs; H2 not tested (no data). [Results](docs/RESULTS_H1_TEST.md) | ✅ |
 | G7.2 | `forward_test.py`: write the 14:00 prediction with a SHA-256, and score it after settlement | ✅ |
-| G7.3 | Publish the 14:00 prediction on expiry 2, before settlement | ❌ |
+| G7.3 | Publish the end-of-day prediction (`predict-eod`, eve-close bhavcopy) for expiry 2, before 15:30 IST on expiry day ([forward/README.md](forward/README.md)) | ❌ |
 | G7.4 | Score the forward test against the settlement | ❌ |
 | G7.5 | Results write-up with confidence intervals, including null results | ❌ |
 
@@ -176,16 +187,18 @@ Start on a Wednesday so day 7 and day 14 are Nifty expiry Tuesdays. See [docs/CA
 
 # Track V: Vivian (systems and capture, Nodes A and B)
 
+> **Dropped on 17 Oct 2026** (scope change at the top): there is no live feed to capture without broker KYC. The finished `gp-log` tasks stay; every open task is marked ➖.
+
 ## V0: Setup (day 0)
 
 | # | Task | Status |
 |---|---|---|
-| V0.1 | Ubuntu 24.04 on Node A and Node B | ❌ |
-| V0.2 | chrony from `ops/chrony.conf` on A and B, offset < 5 ms | ❌ |
-| V0.3 | LAN to Node C; A and B can rsync segments into Node C's inbox | ❌ |
+| V0.1 | Ubuntu 24.04 on Node A and Node B | ➖ |
+| V0.2 | chrony from `ops/chrony.conf` on A and B, offset < 5 ms | ➖ |
+| V0.3 | LAN to Node C; A and B can rsync segments into Node C's inbox | ➖ |
 | V0.4 | `MarketDataFeedV3.proto` downloaded into `proto/` | ✅ |
 
-**🚩 CP-V0:** both nodes synced and able to reach Node C. ❌
+**🚩 CP-V0:** both nodes synced and able to reach Node C. ➖
 
 ## V1: Capture foundation (days 1–3) · `gp-log`, `gp-capture`
 
@@ -193,83 +206,83 @@ Start on a Wednesday so day 7 and day 14 are Nifty expiry Tuesdays. See [docs/CA
 |---|---|---|
 | V1.1 | `gp-log` writer: 32-byte GPL1 header, CRC32C, 64 MiB segments, 100 ms flush | ✅ |
 | V1.2 | `gp-log` reader and crash recovery: truncate at the last valid CRC | ✅ |
-| V1.3 | Basic capture running the same day (raw frames only) | ❌ |
-| V1.4 | Instrument list from the instrument master: current + next Nifty weekly, ±10% of forward, ≤ 1,500 | ❌ |
-| V1.5 | `gp-capture` live on Node A (tokio-tungstenite + rustls) | ❌ |
-| V1.6 | Reconnect: backoff with jitter (100 ms → 5 s), resubscribe, `GAP_START`/`GAP_END` | ❌ |
-| V1.7 | Node B running the second connection | ❌ |
-| V1.8 | `gp auth` CLI and token sync from Node C to A/B; `notify` hot-reload, `TOKEN_RELOAD` record | ❌ |
-| V1.9 | 09:05 alert when no valid token | ❌ |
-| V1.10 | zstd compression of segments after close | ❌ |
-| V1.11 | Crash test: kill capture mid-write, confirm recovery | ❌ |
-| V1.12 | systemd units from `ops/systemd/` installed on A and B | ❌ |
+| V1.3 | Basic capture running the same day (raw frames only) | ➖ |
+| V1.4 | Instrument list from the instrument master: current + next Nifty weekly, ±10% of forward, ≤ 1,500 | ➖ |
+| V1.5 | `gp-capture` live on Node A (tokio-tungstenite + rustls) | ➖ |
+| V1.6 | Reconnect: backoff with jitter (100 ms → 5 s), resubscribe, `GAP_START`/`GAP_END` | ➖ |
+| V1.7 | Node B running the second connection | ➖ |
+| V1.8 | `gp auth` CLI and token sync from Node C to A/B; `notify` hot-reload, `TOKEN_RELOAD` record | ➖ |
+| V1.9 | 09:05 alert when no valid token | ➖ |
+| V1.10 | zstd compression of segments after close | ➖ |
+| V1.11 | Crash test: kill capture mid-write, confirm recovery | ➖ |
+| V1.12 | systemd units from `ops/systemd/` installed on A and B | ➖ |
 
-**🚩 CP-V1:** both nodes capture a full 09:00–15:40 session, and the crash test passes. ❌
+**🚩 CP-V1:** both nodes capture a full 09:00–15:40 session, and the crash test passes. ➖
 
 ## V2: Merge (days 4–5) · `gp-merge`, deployed on Node C
 
 | # | Task | Status |
 |---|---|---|
-| V2.1 | Protobuf decoder (`prost-build`) with golden-file tests | ❌ |
-| V2.2 | Normalize records to the C1 event schema | ❌ |
-| V2.3 | Content de-duplication: (instrument, ltt_ms, cum_volume, oi, hash(L1–L5)), earliest recv, `src_mask` | ❌ |
-| V2.4 | Parquet output partitioned by date and instrument | ❌ |
-| V2.5 | Sorted replay log and per-node coverage report | ❌ |
+| V2.1 | Protobuf decoder (`prost-build`) with golden-file tests | ➖ |
+| V2.2 | Normalize records to the C1 event schema | ➖ |
+| V2.3 | Content de-duplication: (instrument, ltt_ms, cum_volume, oi, hash(L1–L5)), earliest recv, `src_mask` | ➖ |
+| V2.4 | Parquet output partitioned by date and instrument | ➖ |
+| V2.5 | Sorted replay log and per-node coverage report | ➖ |
 
-**🚩 CP-V2:** one captured session merges into C1 Parquet with a coverage report. ❌
+**🚩 CP-V2:** one captured session merges into C1 Parquet with a coverage report. ➖
 
 ## V3: Replay (day 6) · `gp-replay`
 
 | # | Task | Status |
 |---|---|---|
-| V3.1 | Order by (ltt_ms, recv_ns, node, seq); 1×, N×, max speed | ❌ |
-| V3.2 | One stream trait shared by live and replay | ❌ |
-| V3.3 | Determinism test in CI: identical SHA-256 across runs | ❌ |
-| V3.4 | Memory-mapped replay ≥ 1M events/s | ❌ |
+| V3.1 | Order by (ltt_ms, recv_ns, node, seq); 1×, N×, max speed | ➖ |
+| V3.2 | One stream trait shared by live and replay | ➖ |
+| V3.3 | Determinism test in CI: identical SHA-256 across runs | ➖ |
+| V3.4 | Memory-mapped replay ≥ 1M events/s | ➖ |
 
-**🚩 CP-V3:** replay determinism test green in CI. ❌
+**🚩 CP-V3:** replay determinism test green in CI. ➖
 
 ## V4: Expiry 1 (day 7) · Nodes A, B
 
 | # | Task | Status |
 |---|---|---|
-| V4.1 | Full redundant capture through expiry 1 | ❌ |
-| V4.2 | Live chaos test: cut one node's network for 60 s, merge shows 0 lost frames | ❌ |
-| V4.3 | Merge expiry 1 and hand the Parquet to Guru (handoff H3) | ❌ |
+| V4.1 | Full redundant capture through expiry 1 | ➖ |
+| V4.2 | Live chaos test: cut one node's network for 60 s, merge shows 0 lost frames | ➖ |
+| V4.3 | Merge expiry 1 and hand the Parquet to Guru (handoff H3) | ➖ |
 
-**🚩 CP-V4:** chaos test passes with zero lost frames. ❌
+**🚩 CP-V4:** chaos test passes with zero lost frames. ➖
 
 ## V5: Live engine and monitor server (days 8–9) · `gp-monitor`
 
 | # | Task | Status |
 |---|---|---|
-| V5.1 | Live engine on the unified stream: build the chain per expiry, call `gp_quant::analyze` (C3) | ❌ |
-| V5.2 | axum server: `/ws` pushes a C2 snapshot every second, serves `static/` | ❌ |
-| V5.3 | Data health in the snapshot: gaps, lag, node status | ❌ |
-| V5.4 | Benchmarks: ≥ 50k msg/s capture per node | ❌ |
+| V5.1 | Live engine on the unified stream: build the chain per expiry, call `gp_quant::analyze` (C3) | ➖ |
+| V5.2 | axum server: `/ws` pushes a C2 snapshot every second, serves `static/` | ➖ |
+| V5.3 | Data health in the snapshot: gaps, lag, node status | ➖ |
+| V5.4 | Benchmarks: ≥ 50k msg/s capture per node | ➖ |
 
-**🚩 CP-V5:** monitor serves C2 snapshots from replayed expiry 1 (handoff H4). ❌
+**🚩 CP-V5:** monitor serves C2 snapshots from replayed expiry 1 (handoff H4). ➖
 
 ## V6: Hardening (days 10–13)
 
 | # | Task | Status |
 |---|---|---|
-| V6.1 | Feed-to-dashboard latency histograms, p99 < 250 ms | ❌ |
-| V6.2 | Finalize `ops/RUNBOOK.md` | ❌ |
-| V6.3 | Code freeze, tag `freeze-v1` (day 12) | ❌ |
-| V6.4 | Full dry run on replay (day 13) | ❌ |
+| V6.1 | Feed-to-dashboard latency histograms, p99 < 250 ms | ➖ |
+| V6.2 | Finalize `ops/RUNBOOK.md` | ➖ |
+| V6.3 | Code freeze, tag `freeze-v1` (day 12) | ➖ |
+| V6.4 | Full dry run on replay (day 13) | ➖ |
 
-**🚩 CP-V6:** `freeze-v1` tagged, dry run clean. ❌
+**🚩 CP-V6:** `freeze-v1` tagged, dry run clean. ➖
 
 ## V7: Expiry 2 and release (day 14 onward)
 
 | # | Task | Status |
 |---|---|---|
-| V7.1 | Redundant capture through expiry 2, monitor up for users | ❌ |
-| V7.2 | Demo replay of expiry 2 | ❌ |
-| V7.3 | Systems write-up: capture, merge, replay, chaos and benchmark numbers | ❌ |
+| V7.1 | Redundant capture through expiry 2, monitor up for users | ➖ |
+| V7.2 | Demo replay of expiry 2 | ➖ |
+| V7.3 | Systems write-up: capture, merge, replay, chaos and benchmark numbers | ➖ |
 
-**🚩 CP-V7:** demo replay published, no raw ticks in the repo. ❌
+**🚩 CP-V7:** demo replay published, no raw ticks in the repo. ➖
 
 ---
 
@@ -277,12 +290,12 @@ Start on a Wednesday so day 7 and day 14 are Nifty expiry Tuesdays. See [docs/CA
 
 | Metric | Target | Owner | Status |
 |---|---|---|---|
-| Data loss when one node fails | 0 frames (60 s network cut) | Vivian | ❌ |
-| Capture throughput per node | ≥ 50k msg/s sustained | Vivian | ❌ |
+| Data loss when one node fails | 0 frames (60 s network cut) | Vivian | ➖ |
+| Capture throughput per node | ≥ 50k msg/s sustained | Vivian | ➖ |
 | Full-chain recompute (≤ 1,500 contracts) | < 5 ms on one core | Guru | ✅ (2.4 ms) |
-| Feed-to-dashboard latency | p99 < 250 ms | Vivian | ❌ |
-| Replay speed | ≥ 1M events/s | Vivian | ❌ |
-| Replay determinism | SHA-256 identical across runs | Vivian | ❌ |
+| Feed-to-dashboard latency | p99 < 250 ms | Vivian | ➖ |
+| Replay speed | ≥ 1M events/s | Vivian | ➖ |
+| Replay determinism | SHA-256 identical across runs | Vivian | ➖ |
 
 ## Known risks
 
