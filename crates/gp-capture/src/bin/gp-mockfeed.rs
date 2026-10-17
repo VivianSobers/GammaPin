@@ -28,6 +28,10 @@ struct Args {
     master: Option<std::path::PathBuf>,
     #[arg(long, default_value_t = 20_261_019)]
     seed: u64,
+    /// Start the market at the current IST time, one exchange step per frame, so that
+    /// exchange time follows the wall clock and the monitor's lag figures are real.
+    #[arg(long)]
+    now: bool,
 }
 
 #[tokio::main]
@@ -38,11 +42,17 @@ async fn main() -> anyhow::Result<()> {
     if let Some(path) = &a.master {
         std::fs::write(path, gp_feed::synth::master_json(&instruments))?;
     }
-    let market = MarketConfig {
+    let mut market = MarketConfig {
         seed: a.seed,
         spot: a.spot,
         ..MarketConfig::new(date)
     };
+    if a.now {
+        let step = a.interval_ms.max(1) as i64;
+        let now = gp_capture::app::now_ms();
+        market.step_ms = step;
+        market.start_minute = gp_feed::date::ist_minute_of_day(now - step);
+    }
     let feed = MockFeed::start(
         MockConfig {
             market,
