@@ -2,8 +2,10 @@
 //! at 1x, Nx or full speed. Same input, byte-identical output.
 
 pub mod format;
+pub mod reader;
 
 pub use format::{FormatError, Meta, write_replay};
+pub use reader::{ReplayFile, Tick};
 
 /// Replay speed.
 #[derive(Debug, Clone, Copy, PartialEq)]

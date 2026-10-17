@@ -8,4 +8,8 @@ license.workspace = true
 [dependencies]
 crc32c.workspace = true
 gp-feed.workspace = true
+memmap2.workspace = true
 thiserror.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
