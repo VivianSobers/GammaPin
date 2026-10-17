@@ -1,0 +1,13 @@
+[package]
+name = "gp-feed"
+description = "Upstox V3 feed types, decoding, instruments and a synthetic market for tests"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+prost.workspace = true
+
+[build-dependencies]
+prost-build.workspace = true
+protox.workspace = true
