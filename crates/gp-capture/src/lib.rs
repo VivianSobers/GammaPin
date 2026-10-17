@@ -5,3 +5,4 @@ pub mod backoff;
 pub mod config;
 pub mod mock;
 pub mod recorder;
+pub mod subscriber;
