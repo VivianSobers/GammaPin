@@ -60,7 +60,7 @@ def response(kind: int, entries: list[bytes], current_ts: int, extra: bytes = b"
     return i64(1, kind) + b"".join(entries) + i64(3, current_ts) + extra
 
 
-T0 = 1_792_384_200_000  # 2026-10-19 09:15 IST
+T0 = 1_792_384_200_000  # 2026-10-19 10:00 IST
 
 option_full = response(1, [
     feed_entry("NSE_FO|40001", msg(2, msg(1,
