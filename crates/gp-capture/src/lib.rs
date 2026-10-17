@@ -2,6 +2,7 @@
 //! to the GPL1 log before decoding anything.
 
 pub mod backoff;
+pub mod capture;
 pub mod client;
 pub mod config;
 pub mod mock;

@@ -51,6 +51,11 @@ impl Default for ConnOpts {
     }
 }
 
+/// Resolves once `stop` is true (or its sender is gone). Holds no borrow across awaits.
+pub async fn stopped(stop: &mut watch::Receiver<bool>) {
+    let _ = stop.wait_for(|s| *s).await;
+}
+
 /// How a connection went.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Outcome {
@@ -72,7 +77,7 @@ pub async fn run_connection(
     let mut frames = 0;
     let done = |end| Ok(Outcome { end, frames: 0 });
     let ws = tokio::select! {
-        _ = stop.wait_for(|s| *s) => return done(End::Stopped),
+        _ = stopped(stop) => return done(End::Stopped),
         r = tokio::time::timeout(opts.stall, tokio_tungstenite::connect_async(url)) => match r {
             Err(_) => return done(End::Stalled),
             Ok(Err(e)) => return done(End::Failed(e.to_string())),
@@ -90,7 +95,7 @@ pub async fn run_connection(
     let mut deadline = tokio::time::Instant::now() + opts.stall;
     let end = loop {
         tokio::select! {
-            _ = stop.wait_for(|s| *s) => {
+            _ = stopped(stop) => {
                 let _ = sink.close().await;
                 break End::Stopped;
             }
