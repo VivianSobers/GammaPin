@@ -61,7 +61,28 @@ pub fn merge_day(cfg: &Merge, date: Date, master: &Master) -> anyhow::Result<Cov
     )?;
     std::fs::write(tmp.join("coverage.md"), coverage.markdown())?;
     replace_dir(&tmp, &final_dir)?;
+    if cfg.compress {
+        for node in &cfg.nodes {
+            compress_node(&cfg.node_dir(node, date))?;
+        }
+    }
     Ok(coverage)
+}
+
+/// zstd every plain segment of a node's day, after its data is safely merged. Returns the
+/// number of segments compressed.
+pub fn compress_node(dir: &Path) -> anyhow::Result<usize> {
+    if !dir.is_dir() {
+        return Ok(0);
+    }
+    let mut n = 0;
+    for seg in gp_log::list_segments(dir)? {
+        if !seg.compressed {
+            gp_log::compress_segment(&seg.path)?;
+            n += 1;
+        }
+    }
+    Ok(n)
 }
 
 fn replace_dir(from: &Path, to: &Path) -> std::io::Result<()> {
@@ -139,6 +160,7 @@ pub(crate) mod tests {
         Merge {
             inbox: root.join("inbox"),
             out: root.join("merged"),
+            compress: false,
             ..Merge::default()
         }
     }
@@ -191,5 +213,31 @@ pub(crate) mod tests {
 
         std::fs::remove_dir_all(c.node_dir("A", date)).unwrap();
         assert!(merge_day(&c, date, &master).is_err());
+    }
+
+    #[test]
+    fn compresses_segments_and_reads_them_back() {
+        let root = tempfile::tempdir().unwrap();
+        let c = Merge {
+            compress: true,
+            ..cfg(root.path())
+        };
+        let date = Date::from_ymd(2026, 10, 19);
+        let master = two_nodes(&c.inbox, date, 80, 10..20, 0..0);
+        let first = merge_day(&c, date, &master).unwrap();
+        for node in ["A", "B"] {
+            let segs = gp_log::list_segments(&c.node_dir(node, date)).unwrap();
+            assert!(!segs.is_empty() && segs.iter().all(|s| s.compressed));
+        }
+        let digest = |c: &Merge| {
+            let f = ReplayFile::open(&c.day_dir(date).join(REPLAY_FILE)).unwrap();
+            let mut s = gp_replay::ReplayStream::new(std::sync::Arc::new(f));
+            gp_replay::stream_digest(&mut s).unwrap()
+        };
+        let before = digest(&c);
+        let second = merge_day(&c, date, &master).unwrap();
+        assert_eq!(first.dedup, second.dedup);
+        assert_eq!(before, digest(&c));
+        assert_eq!(compress_node(&c.node_dir("A", date)).unwrap(), 0);
     }
 }
