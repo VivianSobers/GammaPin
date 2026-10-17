@@ -1223,14 +1223,20 @@ name = "gp-monitor"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "axum",
+ "futures-util",
  "gp-feed",
  "gp-merge",
  "gp-quant",
  "gp-replay",
+ "reqwest",
  "serde",
  "serde_json",
  "tempfile",
+ "tokio",
+ "tokio-tungstenite 0.30.0",
  "toml",
+ "tracing",
 ]
 
 [[package]]
