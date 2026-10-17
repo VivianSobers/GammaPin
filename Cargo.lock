@@ -420,6 +420,7 @@ name = "gp-feed"
 version = "0.1.0"
 dependencies = [
  "flate2",
+ "gp-quant",
  "prost",
  "prost-build",
  "protox",
