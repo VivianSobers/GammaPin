@@ -165,6 +165,9 @@ fn parse_name(name: &str) -> Option<(u32, bool)> {
 }
 
 /// Segment files in `dir`, sorted by index.
+///
+/// When both forms of one index exist (a crash inside [`compress_segment`] after the
+/// rename), only the `.gpl.zst` is listed: it was complete before the original was removed.
 pub fn list_segments(dir: &Path) -> Result<Vec<SegmentFile>, LogError> {
     let mut out = Vec::new();
     for entry in fs::read_dir(dir)? {
@@ -177,7 +180,8 @@ pub fn list_segments(dir: &Path) -> Result<Vec<SegmentFile>, LogError> {
             });
         }
     }
-    out.sort_by_key(|s| s.index);
+    out.sort_by_key(|s| (s.index, !s.compressed));
+    out.dedup_by_key(|s| s.index);
     Ok(out)
 }
 
@@ -253,6 +257,27 @@ mod tests {
         assert_eq!(listed.len(), 1);
         assert!(listed[0].compressed);
         assert_eq!(listed[0].index, 4);
+    }
+
+    #[test]
+    fn list_prefers_compressed_duplicate() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(segment_file_name(2));
+        let recs = vec![rec(1, 8)];
+        std::fs::write(&path, encode(&recs)).unwrap();
+        let out = compress_segment(&path).unwrap();
+        std::fs::write(&path, encode(&recs)).unwrap(); // as if the remove never happened
+        std::fs::write(dir.path().join(segment_file_name(3)), encode(&recs)).unwrap();
+
+        let listed = list_segments(dir.path()).unwrap();
+        assert_eq!(
+            listed
+                .iter()
+                .map(|s| (s.index, s.compressed))
+                .collect::<Vec<_>>(),
+            vec![(2, true), (3, false)]
+        );
+        assert_eq!(listed[0].path, out);
     }
 
     #[test]
