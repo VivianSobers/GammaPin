@@ -10,6 +10,7 @@ anyhow.workspace = true
 axum.workspace = true
 futures-util.workspace = true
 gp-feed.workspace = true
+gp-log.workspace = true
 gp-merge.workspace = true
 gp-replay.workspace = true
 gp-quant.workspace = true
@@ -20,6 +21,7 @@ toml.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
+prost.workspace = true
 reqwest.workspace = true
 tokio-tungstenite.workspace = true
 tempfile.workspace = true

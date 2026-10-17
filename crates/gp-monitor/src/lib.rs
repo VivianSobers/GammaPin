@@ -6,5 +6,6 @@ pub mod config;
 pub mod driver;
 pub mod engine;
 pub mod health;
+pub mod live;
 pub mod server;
 pub mod snapshot;
