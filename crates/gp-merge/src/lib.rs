@@ -4,4 +4,5 @@
 pub mod config;
 pub mod dedup;
 pub mod normalize;
+pub mod parquet;
 pub mod read;
