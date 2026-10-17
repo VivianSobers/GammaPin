@@ -2,3 +2,4 @@
 //! write C1 Parquet, a sorted replay log and a coverage report.
 
 pub mod config;
+pub mod read;

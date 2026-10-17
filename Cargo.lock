@@ -847,6 +847,7 @@ dependencies = [
  "gp-feed",
  "gp-log",
  "serde",
+ "tempfile",
  "toml",
 ]
 
