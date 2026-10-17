@@ -869,7 +869,9 @@ dependencies = [
 name = "gp-replay"
 version = "0.1.0"
 dependencies = [
- "gp-log",
+ "crc32c",
+ "gp-feed",
+ "thiserror",
 ]
 
 [[package]]

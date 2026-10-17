@@ -1,6 +1,10 @@
 //! gp-replay: replay merged events ordered by (ltt_ms, recv_ns, node, seq)
 //! at 1x, Nx or full speed. Same input, byte-identical output.
 
+pub mod format;
+
+pub use format::{FormatError, Meta, write_replay};
+
 /// Replay speed.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Speed {

@@ -6,4 +6,6 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
-gp-log.workspace = true
+crc32c.workspace = true
+gp-feed.workspace = true
+thiserror.workspace = true
