@@ -1,7 +1,9 @@
 //! gp-feed: the Upstox Market Data Feed V3 as seen by every GammaPin binary.
 
+pub mod date;
 pub mod decode;
 
+pub use date::Date;
 pub use decode::{DEPTH, Update, decode_frame, updates};
 
 /// Types generated from `proto/MarketDataFeed.proto`.
