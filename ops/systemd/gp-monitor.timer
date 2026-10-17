@@ -1,0 +1,9 @@
+[Unit]
+Description=Start the GammaPin monitor before the 09:15 IST open
+
+[Timer]
+OnCalendar=Mon..Fri 08:58 Asia/Kolkata
+Persistent=true
+
+[Install]
+WantedBy=timers.target

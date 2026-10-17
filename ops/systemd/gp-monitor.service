@@ -6,8 +6,12 @@ After=network-online.target
 Type=simple
 User=gammapin
 WorkingDirectory=/opt/gammapin
-ExecStart=/opt/gammapin/bin/gp-monitor --config /etc/gammapin/gammapin.toml
+# Follows today's node segments under [merge] inbox and serves /ws on [monitor] bind.
+ExecStart=/opt/gammapin/bin/gp-monitor --config /etc/gammapin/gammapin.toml live
 Restart=on-failure
+# The timer starts it before the open; this stops it after the close, so the next day's
+# run follows the new date's directories.
+RuntimeMaxSec=7h
 Environment=RUST_LOG=info
 
 [Install]

@@ -1,0 +1,9 @@
+[Unit]
+Description=Check for today's Upstox token at 09:05 IST
+
+[Timer]
+OnCalendar=Mon..Fri 09:05 Asia/Kolkata
+Persistent=true
+
+[Install]
+WantedBy=timers.target

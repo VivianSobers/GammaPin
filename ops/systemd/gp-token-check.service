@@ -1,0 +1,8 @@
+[Unit]
+Description=GammaPin 09:05 check for today's Upstox token (fails without one)
+
+[Service]
+Type=oneshot
+User=gammapin
+WorkingDirectory=/opt/gammapin
+ExecStart=/opt/gammapin/bin/gp-capture --config /etc/gammapin/gammapin.toml check-token

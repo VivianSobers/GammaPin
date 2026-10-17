@@ -6,4 +6,5 @@ After=network-online.target
 Type=oneshot
 User=gammapin
 WorkingDirectory=/opt/gammapin
+# Exit 3: merged, but some window was missed by every node (see coverage.md).
 ExecStart=/opt/gammapin/bin/gp-merge --config /etc/gammapin/gammapin.toml --date today
