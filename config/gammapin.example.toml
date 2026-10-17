@@ -6,7 +6,7 @@ data_dir = "data"           # data/{node}/{date}/seg-{n}.gpl
 
 [upstox]
 token_file = "/etc/gammapin/upstox.token"   # written by `gp auth`, watched by gp-capture
-instrument_master_url = "https://assets.upstox.com/market-quote/instruments/exchange/complete.json.gz"
+instrument_master_url = "https://assets.upstox.com/market-quote/instruments/exchange/NSE.json.gz"
 
 [capture]
 window_ist = ["09:00", "15:40"]
@@ -16,6 +16,9 @@ flush_ms = 100
 backoff_ms = [100, 5000]
 strike_band_pct = 10        # +/- around the forward
 expiries = 2                # current + next Nifty weekly
+max_instruments = 1500
+master_path = "data/NSE.json.gz"   # cached instrument master
+# feed_url = "ws://127.0.0.1:9100"  # connect here instead of Upstox (mock feed, dry runs)
 
 [merge]
 nodes = ["A", "B"]
