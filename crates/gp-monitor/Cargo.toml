@@ -6,11 +6,14 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+anyhow.workspace = true
 gp-feed.workspace = true
+gp-merge.workspace = true
 gp-replay.workspace = true
 gp-quant.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+toml.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

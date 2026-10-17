@@ -1222,11 +1222,15 @@ dependencies = [
 name = "gp-monitor"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "gp-feed",
+ "gp-merge",
  "gp-quant",
  "gp-replay",
  "serde",
  "serde_json",
+ "tempfile",
+ "toml",
 ]
 
 [[package]]

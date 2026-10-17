@@ -23,6 +23,7 @@ gp-feed = { path = "crates/gp-feed" }
 gp-replay = { path = "crates/gp-replay" }
 gp-quant = { path = "crates/gp-quant" }
 gp-capture = { path = "crates/gp-capture" }
+gp-merge = { path = "crates/gp-merge" }
 
 tokio = { version = "1", features = ["full"] }
 tokio-tungstenite = { version = "0.30", features = ["rustls-tls-webpki-roots"] }

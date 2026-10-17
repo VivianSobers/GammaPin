@@ -31,3 +31,14 @@ compress = true                 # zstd the node segments after a successful merg
 [monitor]
 bind = "0.0.0.0:8080"
 snapshot_ms = 1000
+static_dir = "crates/gp-monitor/static"
+rate = 0.065                    # RBI 91-day T-bill, decimal
+holidays = ["2026-10-20", "2026-11-10", "2026-11-24", "2026-12-25"]   # docs/CALENDAR.md; confirm 9 vs 10 Nov with NSE
+# S1/S2 [w_c, w_p] from the previous day's participant OI (research/participant_oi.py).
+# S0 is always shown.
+# weights = { S1 = [-0.31, 0.58], S2 = [-0.29, 0.55] }
+
+[monitor.h1_accuracy]           # training-set H1 MAE (docs/RESULTS.md)
+S0 = { mae = 201.6, n = 66 }
+S1 = { mae = 165.2, n = 65 }
+S2 = { mae = 166.5, n = 65 }
