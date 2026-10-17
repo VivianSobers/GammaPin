@@ -9,3 +9,4 @@ pub mod endpoint;
 pub mod mock;
 pub mod recorder;
 pub mod subscriber;
+pub mod token;

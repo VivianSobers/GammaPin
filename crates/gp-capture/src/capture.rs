@@ -1,8 +1,10 @@
 //! The capture loop: connect, record, and on any failure write `GAP_START`, back off,
 //! reconnect and resubscribe. The first frame after a reconnect writes `GAP_END`.
 
+use std::sync::Arc;
+
 use gp_log::LogError;
-use tokio::sync::watch;
+use tokio::sync::{Notify, watch};
 
 use crate::backoff::Backoff;
 use crate::client::{ConnOpts, End, Outcome, run_connection, stopped};
@@ -17,13 +19,15 @@ pub struct Summary {
     pub gaps: u64,
 }
 
-/// Capture from `endpoint` until `stop` becomes true.
+/// Capture from `endpoint` until `stop` becomes true. When `token_changed` fires during a
+/// backoff wait, the next attempt starts at once.
 pub async fn capture(
     endpoint: &Endpoint,
     sub: &mut Subscriber,
     rec: &mut Recorder,
     backoff: &mut Backoff,
     opts: ConnOpts,
+    token_changed: Option<Arc<Notify>>,
     stop: &mut watch::Receiver<bool>,
 ) -> Result<Summary, LogError> {
     let mut summary = Summary::default();
@@ -31,7 +35,13 @@ pub async fn capture(
         .timeout(opts.stall)
         .build()
         .expect("TLS backend available");
+    let mut token = None;
     while !*stop.borrow() {
+        if let Some(fp) = endpoint.token_fingerprint()
+            && token.replace(fp) != Some(fp)
+        {
+            rec.token_reload("token file changed")?;
+        }
         let out = match endpoint.url(&http).await {
             Ok(url) => run_connection(&url, sub, rec, opts, stop).await?,
             Err(e) => Outcome {
@@ -50,9 +60,16 @@ pub async fn capture(
         rec.gap_start(&out.end.reason())?;
         rec.flush()?;
         let delay = backoff.next_delay();
+        let woken = async {
+            match &token_changed {
+                Some(n) => n.notified().await,
+                None => std::future::pending().await,
+            }
+        };
         tokio::select! {
             _ = stopped(stop) => break,
             _ = tokio::time::sleep(delay) => {}
+            _ = woken => backoff.reset(),
         }
     }
     summary.gaps = rec.stats().gaps;
@@ -98,7 +115,7 @@ mod tests {
         let (tx, mut rx) = watch::channel(false);
         let url = Endpoint::Direct(feed.url());
         let task = tokio::spawn(async move {
-            let s = capture(&url, &mut sub, &mut rec, &mut backoff, opts, &mut rx)
+            let s = capture(&url, &mut sub, &mut rec, &mut backoff, opts, None, &mut rx)
                 .await
                 .unwrap();
             rec.close().unwrap();
@@ -147,5 +164,99 @@ mod tests {
         assert!(kinds[..starts[0]].contains(&RecordKind::RawFrame));
         assert!(kinds[ends[0]..starts[1]].contains(&RecordKind::RawFrame));
         assert!(kinds[ends[1]..].contains(&RecordKind::RawFrame));
+    }
+
+    #[tokio::test]
+    async fn new_token_wakes_backoff_and_is_recorded() {
+        use axum::routing::get;
+        let date = Date::from_ymd(2026, 10, 19);
+        let u = universe(date, 25_000.0, 1, 2.0, 50.0);
+        let feed = MockFeed::start(
+            MockConfig {
+                market: MarketConfig::new(date),
+                instruments: u.clone(),
+                interval: Duration::from_millis(5),
+            },
+            "127.0.0.1:0",
+        )
+        .await
+        .unwrap();
+        // Authorize only the token "fresh"; hand out the mock feed's URL.
+        let ws = feed.url();
+        let app = axum::Router::new().route(
+            crate::endpoint::AUTHORIZE_PATH,
+            get(move |h: axum::http::HeaderMap| {
+                let ws = ws.clone();
+                async move {
+                    if h.get("authorization").and_then(|v| v.to_str().ok()) == Some("Bearer fresh") {
+                        (axum::http::StatusCode::OK, format!(
+                            r#"{{"status":"success","data":{{"authorized_redirect_uri":"{ws}"}}}}"#
+                        ))
+                    } else {
+                        (axum::http::StatusCode::UNAUTHORIZED, String::new())
+                    }
+                }
+            }),
+        );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let api = format!("http://{}", listener.local_addr().unwrap());
+        tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+
+        let dir = tempfile::tempdir().unwrap();
+        let token_file = dir.path().join("upstox.token");
+        std::fs::write(&token_file, "stale").unwrap();
+        let watch = crate::token::TokenWatch::new(&token_file).unwrap();
+        let endpoint = Endpoint::Upstox {
+            api_base: api,
+            token_file: token_file.clone(),
+        };
+        let logs = tempfile::tempdir().unwrap();
+        let (mut rec, _) = Recorder::open(logs.path(), WriterConfig::default(), 0).unwrap();
+        let mut sub = Subscriber::new(u, date, Selection::default(), "A");
+        // A long backoff: only the token notification can get the capture going quickly.
+        let mut backoff = Backoff::new(Duration::from_secs(30), Duration::from_secs(30), 1);
+        let opts = ConnOpts {
+            stall: Duration::from_secs(2),
+            flush: Duration::from_millis(20),
+        };
+        let (tx, mut rx) = watch::channel(false);
+        let changed = watch.changed();
+        let task = tokio::spawn(async move {
+            let s = capture(
+                &endpoint,
+                &mut sub,
+                &mut rec,
+                &mut backoff,
+                opts,
+                Some(changed),
+                &mut rx,
+            )
+            .await
+            .unwrap();
+            rec.close().unwrap();
+            s
+        });
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        std::fs::write(&token_file, "fresh").unwrap();
+        tokio::time::sleep(Duration::from_millis(800)).await;
+        tx.send(true).unwrap();
+        let summary = tokio::time::timeout(Duration::from_secs(5), task)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(summary.frames > 10, "{summary:?}");
+
+        let recs = read_log(logs.path()).unwrap();
+        let kinds: Vec<_> = recs.iter().map(|r| r.kind).collect();
+        assert_eq!(kinds[0], RecordKind::TokenReload);
+        assert_eq!(kinds[1], RecordKind::GapStart);
+        assert!(String::from_utf8_lossy(&recs[1].payload).contains("HTTP 401"));
+        assert_eq!(kinds[2], RecordKind::TokenReload);
+        assert!(kinds.contains(&RecordKind::GapEnd));
+        assert!(
+            recs.iter()
+                .all(|r| !String::from_utf8_lossy(&r.payload).contains("fresh"))
+        );
+        drop(watch);
     }
 }

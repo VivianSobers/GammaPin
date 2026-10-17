@@ -12,6 +12,7 @@ futures-util.workspace = true
 gp-feed.workspace = true
 gp-log.workspace = true
 libc.workspace = true
+notify.workspace = true
 prost.workspace = true
 reqwest.workspace = true
 serde.workspace = true

@@ -41,6 +41,16 @@ pub fn read_token(path: &std::path::Path) -> Result<String, String> {
 }
 
 impl Endpoint {
+    /// Fingerprint of the token the next attempt would use, if this endpoint uses one.
+    pub fn token_fingerprint(&self) -> Option<u64> {
+        match self {
+            Self::Direct(_) => None,
+            Self::Upstox { token_file, .. } => read_token(token_file)
+                .ok()
+                .map(|t| crate::token::fingerprint(&t)),
+        }
+    }
+
     /// The URL for the next connection attempt. Errors are short texts for `GAP_START`
     /// and never include the token.
     pub async fn url(&self, http: &reqwest::Client) -> Result<String, String> {
