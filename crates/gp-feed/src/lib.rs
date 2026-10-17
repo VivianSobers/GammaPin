@@ -2,9 +2,11 @@
 
 pub mod date;
 pub mod decode;
+pub mod instruments;
 
 pub use date::Date;
 pub use decode::{DEPTH, Update, decode_frame, updates};
+pub use instruments::{Instrument, Kind, Master, NIFTY_INDEX_KEY, parse_master, read_master};
 
 /// Types generated from `proto/MarketDataFeed.proto`.
 #[allow(clippy::all, clippy::pedantic)]
