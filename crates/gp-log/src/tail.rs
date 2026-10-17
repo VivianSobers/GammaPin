@@ -38,6 +38,15 @@ impl Tail {
         }
     }
 
+    /// Start at segment `index`, waiting for it if it does not exist yet. Used to move past
+    /// a segment whose tail was torn by a writer crash.
+    pub fn starting_at(dir: impl Into<PathBuf>, index: u32) -> Self {
+        Self {
+            index: Some(index),
+            ..Self::new(dir)
+        }
+    }
+
     /// Segment index being read, once one exists.
     pub fn segment_index(&self) -> Option<u32> {
         self.index
@@ -216,5 +225,27 @@ mod tests {
         w.close().unwrap();
         crate::compress_segment(&dir.path().join(segment_file_name(0))).unwrap();
         assert_eq!(Tail::new(dir.path()).poll().unwrap().len(), 3);
+    }
+
+    #[test]
+    fn starts_at_a_later_segment() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut t = Tail::starting_at(dir.path(), 1);
+        assert!(t.poll().unwrap().is_empty());
+        let (mut w, _) = Writer::open(dir.path(), cfg(200)).unwrap();
+        for i in 0..6 {
+            put(&mut w, i, 40);
+        }
+        w.close().unwrap();
+        let all = read_log(dir.path()).unwrap();
+        let first_seg = read_segment(&dir.path().join(segment_file_name(0))).unwrap();
+        let got = t.poll().unwrap();
+        assert_eq!(got.len(), all.len() - first_seg.len());
+        assert_eq!(got[..], all[first_seg.len()..]);
+        assert_eq!(t.segment_index(), Some(w_last(dir.path())));
+    }
+
+    fn w_last(dir: &Path) -> u32 {
+        list_segments(dir).unwrap().last().unwrap().index
     }
 }
