@@ -10,6 +10,7 @@ use std::time::Duration;
 use gp_replay::{EventStream, Poll, Source, StreamError};
 
 use crate::engine::Engine;
+use crate::health::Histogram;
 use crate::snapshot::Snapshot;
 
 /// Events taken per pass before checking the clock.
@@ -17,12 +18,15 @@ const BATCH: usize = 4_096;
 /// Sleep while the stream has nothing new.
 const IDLE: Duration = Duration::from_millis(2);
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct Summary {
     pub events: u64,
     pub snapshots: u64,
     /// Snapshots that could not be built yet (no spot or chain).
     pub skipped: u64,
+    /// Live only: age of the newest index tick when each snapshot was built, ms. This is
+    /// the feed-to-engine latency the dashboard sees, without the snapshot cadence.
+    pub staleness: Histogram,
 }
 
 pub struct Driver<'a> {
@@ -58,6 +62,11 @@ impl Driver<'_> {
             match engine.snapshot(ts, source.as_str()) {
                 Ok(s) => {
                     sum.snapshots += 1;
+                    if source == Source::Live
+                        && let Some((_, ltt)) = engine.book().spot()
+                    {
+                        sum.staleness.record((now - ltt) as f64);
+                    }
                     publish(s);
                 }
                 Err(_) => sum.skipped += 1,
@@ -145,6 +154,31 @@ mod tests {
         assert_eq!(last.ts_ms, last_ltt);
         assert_eq!(last.source, "replay");
         assert!(got.windows(2).all(|w| w[0].ts_ms <= w[1].ts_ms));
+        assert_eq!(sum.staleness.count(), 0); // replay: not measured
+    }
+
+    #[test]
+    fn live_snapshots_measure_staleness() {
+        let date = Date::from_ymd(2026, 10, 19);
+        let evs = market_events(date, 8);
+        let newest = evs
+            .iter()
+            .filter(|e| e.kind == gp_feed::Kind::Idx)
+            .map(|e| e.ltt_ms)
+            .max()
+            .unwrap();
+        let mut stream = VecStream::new(evs, Source::Live);
+        let mut engine = Engine::new(EngineConfig::default());
+        let stop = AtomicBool::new(false);
+        let clock = || newest + 120;
+        let drv = Driver {
+            every_ms: 1_000,
+            clock: &clock,
+            stop: &stop,
+        };
+        let sum = drv.run(&mut stream, &mut engine, &mut |_| {}).unwrap();
+        assert_eq!(sum.staleness.count(), sum.snapshots);
+        assert_eq!(sum.staleness.quantile(0.5), Some(121.0));
     }
 
     #[test]
