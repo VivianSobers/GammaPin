@@ -9,7 +9,7 @@ Two people, three machines, 14 days, two Nifty expiries. This file is the plan a
 Every live feed for NSE options needs a broker or vendor account, and opening one means handing over Aadhaar, PAN and bank details under SEBI KYC. The project already runs its research on free public data only (see "Design change before the freeze" in [PREREGISTRATION.md](PREREGISTRATION.md)), so live capture is dropped too:
 
 - **Track V loses every step that needs the live feed or the capture nodes.** The systems themselves were finished and tested on a synthetic feed (`gp-mockfeed`) instead: capture, merge, replay and the monitor server. See [docs/SYSTEMS.md](docs/SYSTEMS.md).
-- **Track G loses the steps that need live ticks:** G0.11, G0.12, G5.3 and G6.2, and handoffs H3, H4 and H5. The dashboard keeps running on its mock feed.
+- **Track G loses the steps that need live ticks:** G0.11, G0.12 and G6.2, and handoffs H3 and H5. The dashboard runs on `gp-monitor`'s `/ws` from the mock feed (G5.3).
 - **The forward test uses the end-of-day design** (`forward_test.py predict-eod`) from the free NSE bhavcopy instead of a 14:00 snapshot from the live monitor (G7.3).
 - **No pre-registered rule changes.** H1 already uses the bhavcopy, and H2 was already not tested.
 
@@ -157,7 +157,7 @@ From 17 Oct 2026 the live steps above are dropped (see the scope change at the t
 |---|---|---|
 | G5.1 | Page shell: banner, WebSocket client, mock mode from `static/mock/snapshot.json` | ✅ |
 | G5.2 | Panels: F and flip, GEX by strike (S0/S1) with uPlot, pin, regime, H1 accuracy, data health | ✅ |
-| G5.3 | ~~Point the page at Vivian's live `/ws` (after handoff H4)~~ Dropped: no live feed | ➖ |
+| G5.3 | Point the page at Vivian's `/ws` (after handoff H4): checked in headless Edge against `gp-monitor` live and replay on the mock feed, 0 rejected snapshots, node cut shown; lag warning moved to 2 s ([runbook](ops/RUNBOOK.md#dashboard-on-live-ws)) | ✅ |
 
 **🚩 CP-G5:** dashboard renders every C2 field from the mock feed. ✅
 

@@ -19,6 +19,8 @@
   var TRADING_DAYS = 252;
   var MINUTES_PER_SESSION = 375; // 09:15-15:30 IST
   var STALE_MS = 3000;
+  // C2 lag includes the wait for the next 1 s snapshot, so a healthy live feed runs p99 ~1.2 s.
+  var LAG_WARN_MS = 2000;
   var CRORE = 1e7;
   var MINUS = '−';
   var DASH = '—';
@@ -223,7 +225,7 @@
       health: {
         p50Text: fmtNum(h.lag_ms_p50, 0) + ' ms',
         p99Text: fmtNum(h.lag_ms_p99, 0) + ' ms',
-        p99Warn: isNum(h.lag_ms_p99) && h.lag_ms_p99 > 1000,
+        p99Warn: isNum(h.lag_ms_p99) && h.lag_ms_p99 > LAG_WARN_MS,
         gapsText: fmtNum(h.gaps_today, 0),
         gapsWarn: isNum(h.gaps_today) && h.gaps_today > 0,
         nodes: nodes,

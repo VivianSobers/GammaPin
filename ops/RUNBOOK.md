@@ -74,6 +74,19 @@ static_dir = "../crates/gp-monitor/static"
 | Replay | `../$B/gp-monitor --config a.toml replay --date $D --speed 10x` | The page shows `REPLAY` and the session again |
 | Determinism | `../$B/gp-replay hash merged/date=$D/replay.gpr` twice | Same SHA-256 |
 
+### Dashboard on live `/ws`
+
+Open http://127.0.0.1:8080 (no `?mock`) while the monitor runs live. For S1, S2 and the H1 accuracy, copy the commented `weights` line and `[monitor.h1_accuracy]` from `config/gammapin.example.toml` into `a.toml`; without them the page shows S0 only and "no history yet".
+
+| Check | Expect |
+|---|---|
+| Status line | `LIVE`, WebSocket `open`, updated < 3 s ago; no `MOCK DATA` flag or "(no /ws snapshot …)" reason |
+| Validation | No `rejected: …` on the status line |
+| Panels | Spot, F and t; GEX by strike for each convention with F, flip and pin markers; pin with H1 accuracy; regime; data health with both nodes up |
+| Lag | p50 ≈ 0.6–0.75 s, p99 ≈ 1.1–1.25 s: C2 lag includes the wait for the next snapshot. After a monitor restart mid-day, the first 60 s read up to 10 s while it catches up on the day's logs |
+| Cut a node | Node B turns `down` about 5 s after it stops, `up` within 2 s of its restart |
+| Restart the monitor (e.g. live → replay) | `closed, retry in N s`, then `open` and `REPLAY`, with no fallback to mock |
+
 ### With an Upstox account (if one is ever opened)
 
 | Time | Node | Step | Check |
