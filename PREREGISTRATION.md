@@ -166,4 +166,4 @@ Tests, per (S·, baseline) pair (3 × 3), on the expiries where both errors are 
 
 ## Deviations
 
-None yet.
+- **18 Oct 2026: a second forward expiry.** The forward test also covers expiry 1 (Mon 19 Oct 2026), published from the 16 Oct bhavcopy before the open, as well as expiry 2 (Tue 27 Oct). Nothing about H1, its data, its metric or its analysis changes, and the training and test results are untouched. Expiry 1 was added once the end-of-day design made it possible without live capture. Both forward expiries are reported whatever their outcome.

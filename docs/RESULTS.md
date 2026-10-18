@@ -91,11 +91,12 @@ These come from the committed test-set outputs and are for context only. None of
 
 ## Forward test
 
-The H1 prediction for **expiry 2 (Tue 27 Oct 2026)** is published from the eve's bhavcopy before the close, with a SHA-256 in a public git commit, then scored against the settlement ([forward/README.md](../forward/README.md)). One forward expiry cannot confirm or reject H1. It shows the pipeline running live and in public, without hindsight.
+The H1 predictions for **expiry 1 (Mon 19 Oct 2026)** and **expiry 2 (Tue 27 Oct 2026)** are published from the eve's bhavcopy before the session, with a SHA-256 in a public git commit, then scored against the settlement ([forward/README.md](../forward/README.md)). Expiry 1 was added after the freeze (PREREGISTRATION.md, "Deviations"). Two forward expiries cannot confirm or reject H1. They show the pipeline running live and in public, without hindsight.
 
-| Expiry | Published | Pin S0 | Pin S1 | Pin S2 | Max pain | Settlement | Errors |
-|---|---|---|---|---|---|---|---|
-| 27 Oct 2026 | pending | | | | | | |
+| Expiry | Eve | Published (UTC) | SHA-256 | Pin S0 | Pin S1 | Pin S2 | Max pain | No move | Settlement | Errors |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 19 Oct 2026 | 16 Oct | 18 Oct 17:16 | `c5827627…` | 23,200 | 23,000 | 23,000 | 23,050 | 23,103.5 | pending | |
+| 27 Oct 2026 | 26 Oct | pending | | | | | | | | |
 
 ## Limitations
 
