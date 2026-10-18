@@ -269,10 +269,10 @@ From 17 Oct 2026 the live steps above are dropped (see the scope change at the t
 |---|---|---|
 | V6.1 | Feed-to-dashboard latency histograms, p99 < 250 ms (156 ms, mock feed) | ✅ |
 | V6.2 | Finalize `ops/RUNBOOK.md` | ✅ |
-| V6.3 | Code freeze, tag `freeze-v1` (day 12) | ❌ |
+| V6.3 | Code freeze, tag `freeze-v1` (day 12): tagged at `869a70e` | ✅ |
 | V6.4 | Full dry run: mock feed → two captures → live monitor → merge → replay | ✅ |
 
-**🚩 CP-V6:** `freeze-v1` tagged, dry run clean. ❌ (dry run clean; tag not yet pushed)
+**🚩 CP-V6:** `freeze-v1` tagged, dry run clean. ✅
 
 ## V7: Expiry 2 and release (day 14 onward)
 
