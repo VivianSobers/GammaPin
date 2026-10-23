@@ -1,6 +1,6 @@
 # Does gamma exposure pin Nifty at expiry? (G7.5)
 
-**Short answer: no.** On 94 Nifty weekly expiries, split 66 training and 28 test before any outcome was computed, the strike with the largest positive gamma exposure (GEX) at the expiry-eve close is never a better guess of the settlement than a simple baseline. Under the US sign convention it is significantly worse. The forward test on a live expiry is still to come (see [Forward test](#forward-test)).
+**Short answer: no.** On 94 Nifty weekly expiries, split 66 training and 28 test before any outcome was computed, the strike with the largest positive gamma exposure (GEX) at the expiry-eve close is never a better guess of the settlement than a simple baseline. Under the US sign convention it is significantly worse. The first forward test (19 Oct 2026) confirms the pattern: S0 was 311 points off, while S1/S2 missed by 111, still worse than max pain's 161 (see [Forward test](#forward-test)).
 
 ## Question
 
@@ -95,7 +95,7 @@ The H1 predictions for **expiry 1 (Mon 19 Oct 2026)** and **expiry 2 (Tue 27 Oct
 
 | Expiry | Eve | Published (UTC) | SHA-256 | Pin S0 | Pin S1 | Pin S2 | Max pain | No move | Settlement | Errors |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 19 Oct 2026 | 16 Oct | 18 Oct 17:16 | `c5827627…` | 23,200 | 23,000 | 23,000 | 23,050 | 23,103.5 | pending | |
+| 19 Oct 2026 | 16 Oct | 18 Oct 17:16 | `c5827627…` | 23,200 | 23,000 | 23,000 | 23,050 | 23,103.5 | 22,888.95 | S0 311, S1 111, S2 111, MP 161, NM 215 |
 | 27 Oct 2026 | 26 Oct | pending | | | | | | | | |
 
 ## Limitations

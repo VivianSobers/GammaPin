@@ -216,7 +216,7 @@ finished every system on the mock feed after the scope change.
 | G0–G4 | Contracts, pricing core, historical data, GEX engine, research pipelines | ✅ (G0.13 branch protection open) |
 | G5 | Dashboard on `gp-monitor`'s live `/ws`, fed by the mock market | ✅ |
 | G6 | Validation and model freeze (`freeze-v1`) | ✅ |
-| G7 | Test set, forward predictions, scoring, final write-up | ✅ test set · ⏳ forward scoring and final write-up |
+| G7 | Test set, forward predictions, scoring, final write-up | ✅ test set · ✅ expiry-1 scored · ⏳ expiry-2 and final write-up |
 | V0–V3 | Capture foundation, merge, replay | ✅ on the mock feed |
 | V5–V6 | Live engine, monitor server, hardening | ✅ on the mock feed |
 | V4, V7 | Live expiry capture | ✂️ dropped — needs a KYC'd feed |
@@ -236,7 +236,7 @@ finished every system on the mock feed after the scope change.
 
 | Expiry | Published | Pin S0 | Pin S1 | Pin S2 | Max pain | No move | Settlement |
 |---|---|---:|---:|---:|---:|---:|---|
-| 19 Oct 2026 | 18 Oct, `c5827627…` | 23,200 | 23,000 | 23,000 | 23,050 | 23,103.5 | pending |
+| 19 Oct 2026 | 18 Oct, `c5827627…` | 23,200 | 23,000 | 23,000 | 23,050 | 23,103.5 | 22,888.95 |
 | 27 Oct 2026 | pending | | | | | | |
 
 Two forward expiries cannot confirm or reject H1. They show the pipeline running

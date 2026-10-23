@@ -179,7 +179,7 @@ From 17 Oct 2026 the live steps above are dropped (see the scope change at the t
 | G7.2 | `forward_test.py`: write the 14:00 prediction with a SHA-256, and score it after settlement | ✅ |
 | G7.3 | Publish the end-of-day prediction (`predict-eod`, eve-close bhavcopy) for expiry 2, before 15:30 IST on expiry day ([forward/README.md](forward/README.md)) | ❌ |
 | G7.4 | Score the forward test against the settlement | ❌ |
-| G7.5 | Results write-up with confidence intervals, including null results. [Draft](docs/RESULTS.md); forward-test row after G7.4 | ❌ |
+| G7.5 | Results write-up with confidence intervals, including null results. [Draft](docs/RESULTS.md); forward-test row after G7.4 | ⏳ |
 | G7.6 | Extra forward test on expiry 1 (Mon 19 Oct): publish `predict-eod` from the 16 Oct bhavcopy before the open. [forward/2026-10-19.json](forward/2026-10-19.json) | ✅ |
 | G7.7 | Score the expiry-1 forward test against the settlement | ✅ |
 
