@@ -183,7 +183,7 @@ def test_compare_handles_missing_side():
 def run(events, opts, conventions=None):
     weights = conventions or {"S0": gp.S0}
     times = vt.time_grid(DAY, dt.time(13, 45), dt.time(14, 15), 15)
-    return vt.validate(events, opts, DAY, times, R, weights, [DAY])
+    return vt.validate(events, opts, DAY, times, r=R, weights=weights, trading_days=[DAY])
 
 
 def test_consistent_world_agrees(events):
@@ -234,7 +234,7 @@ def test_resolve_weights(monkeypatch):
     assert vt.resolve_weights(["S0"], DAY) == {"S0": (1.0, -1.0)}
     table = {"S0": (1.0, -1.0), "S1": (0.3, -0.2), "S2": (-0.1, 0.4)}
     fake = types.SimpleNamespace(load=lambda: "df", weights_for=lambda day, df: table)
-    monkeypatch.setitem(sys.modules, "participant_oi", fake)
+    monkeypatch.setattr(vt, "participant_oi", fake)
     assert vt.resolve_weights(["S0", "S2"], DAY) == {"S0": (1.0, -1.0), "S2": (-0.1, 0.4)}
     with pytest.raises(ValueError, match="unknown"):
         vt.resolve_weights(["S9"], DAY)

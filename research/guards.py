@@ -61,7 +61,7 @@ def same(a: Any, b: Any) -> bool:
     if isinstance(a, (list, tuple)) or isinstance(b, (list, tuple)):
         return (
             isinstance(a, (list, tuple)) and isinstance(b, (list, tuple))
-            and len(a) == len(b) and all(same(x, y) for x, y in zip(a, b))
+            and len(a) == len(b) and all(same(x, y) for x, y in zip(a, b, strict=True))
         )
     if isinstance(a, float) and isinstance(b, float) and np.isnan(a) and np.isnan(b):
         return True

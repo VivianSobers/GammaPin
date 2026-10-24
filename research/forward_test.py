@@ -87,7 +87,7 @@ def build_payload(snapshot: dict, snapshot_bytes: bytes, expiry: dt.date, create
         "notes": [MAX_PAIN_NOTE],
         "warnings": warnings,
         "snapshot": {"sha256": sha256_hex(snapshot_bytes), "ts_ms": snapshot["ts_ms"], "source": snapshot.get("source")},
-        "created_at_utc": created_at.astimezone(dt.timezone.utc).isoformat(timespec="seconds"),
+        "created_at_utc": created_at.astimezone(dt.UTC).isoformat(timespec="seconds"),
     }
 
 
@@ -155,7 +155,7 @@ def build_eod_payload(
         "notes": [],
         "warnings": warnings,
         "source": {"bhavcopy": bhavcopy.path_for(eve).name, "sha256": source_sha256},
-        "created_at_utc": created_at.astimezone(dt.timezone.utc).isoformat(timespec="seconds"),
+        "created_at_utc": created_at.astimezone(dt.UTC).isoformat(timespec="seconds"),
     }
 
 
@@ -172,7 +172,7 @@ def predict_eod(expiry: dt.date, out: Path = FORWARD, force: bool = False) -> Pa
         raise LookupError(f"no cached bhavcopy before {expiry}")
     poi, rate_df = participant_oi.load(), rates.load()
     payload = build_eod_payload(
-        expiry, dt.datetime.now(dt.timezone.utc), days, bhavcopy.load,
+        expiry, dt.datetime.now(dt.UTC), days, bhavcopy.load,
         lambda d: participant_oi.weights_for(d, poi), lambda d: rates.rate_on(d, rate_df),
         sha256_hex(bhavcopy.path_for(eve).read_bytes()),
         calendar=set(poi["date"].to_list()) | set(settlements.load()),
@@ -204,7 +204,7 @@ def snapshot_copy_path(out: Path, expiry: dt.date) -> Path:
 def predict(snapshot_file: Path, expiry: dt.date, out: Path = FORWARD, force: bool = False) -> Path:
     """Write forward/{expiry}.json and an exact copy of the snapshot it came from."""
     raw = snapshot_file.read_bytes()
-    record = seal(build_payload(json.loads(raw), raw, expiry, dt.datetime.now(dt.timezone.utc)))
+    record = seal(build_payload(json.loads(raw), raw, expiry, dt.datetime.now(dt.UTC)))
     path = prediction_path(out, expiry)
     if path.exists() and not force:
         raise FileExistsError(f"{path} exists; a published prediction must not be replaced (use --force before publishing only)")
@@ -255,7 +255,7 @@ def score(expiry: dt.date, settlement: float | None, out: Path = FORWARD) -> Pat
 
         settlement = settlements.settlement(expiry)
     result = score_record(json.loads(path.read_text(encoding="utf-8")), settlement)
-    result["scored_at_utc"] = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
+    result["scored_at_utc"] = dt.datetime.now(dt.UTC).isoformat(timespec="seconds")
     dest = out / f"{expiry.isoformat()}_score.json"
     dest.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return dest

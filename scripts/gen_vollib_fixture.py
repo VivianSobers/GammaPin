@@ -1,6 +1,6 @@
 """Write py_vollib Black-76 reference values for crates/gp-quant/tests/vollib.rs.
 
-Run: python scripts/gen_vollib_fixture.py  (needs py_vollib from research/requirements.txt)
+Run: python scripts/gen_vollib_fixture.py  (needs py_vollib: pip install -r scripts/requirements.txt)
 """
 
 import csv

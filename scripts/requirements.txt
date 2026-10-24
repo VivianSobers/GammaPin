@@ -1,0 +1,2 @@
+# scripts/gen_vollib_fixture.py only; research/requirements.txt does not need it.
+py_vollib>=1.0

@@ -1,7 +1,7 @@
 """Official Nifty 50 closing value on each expiry day: the H1 target.
 
 NSE index options settle on the index closing price of the expiry day. NSE publishes all index closes
-daily at https://archives.nseindia.com/content/indices/ind_close_all_DDMMYYYY.csv (browser User-Agent
+daily at https://nsearchives.nseindia.com/content/indices/ind_close_all_DDMMYYYY.csv (browser User-Agent
 needed; 404 = holiday). Header: Index Name, Index Date (DD-MM-YYYY), Open/High/Low Index Value,
 Closing Index Value, ... The Nifty 50 row is `Index Name == "Nifty 50"` (it can appear twice, identical).
 
@@ -21,7 +21,7 @@ import requests
 
 from participant_oi import download, weekdays
 
-URL = "https://archives.nseindia.com/content/indices/ind_close_all_{stamp}.csv"
+URL = "https://nsearchives.nseindia.com/content/indices/ind_close_all_{stamp}.csv"
 CACHE_DIR = Path(__file__).resolve().parent / "cache" / "index_close"
 INDEX = "Nifty 50"
 DATE_FORMATS = ("%d-%m-%Y", "%d-%b-%Y", "%d/%m/%Y", "%Y-%m-%d")

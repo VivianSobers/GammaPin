@@ -146,7 +146,7 @@ def gex_snapshot(
     if out is None:
         return None
     snap = {"forward": out["forward"]}
-    for c, conv in zip(CONVENTIONS, out["conventions"]):
+    for c, conv in zip(CONVENTIONS, out["conventions"], strict=True):
         snap[f"net_gex_{c}"] = conv["net_gex"]
         snap[f"flip_{c}"] = conv["flip"]
     return snap
@@ -245,7 +245,7 @@ def ols(train: pl.DataFrame, columns: list[str]) -> Fit:
 def fit(train: pl.DataFrame, convention: str) -> tuple[Fit, Fit]:
     """(model, baseline) for one convention; `train` must carry gex_z columns (see standardize)."""
     gex = f"gex_z_{convention}"
-    model = ols(train, controls(convention) + [gex])
+    model = ols(train, [*controls(convention), gex])
     if gex not in model.columns:
         raise ValueError(f"{gex} has no variation in the training rows")
     return model, ols(train, [c for c in model.columns if c != gex])
@@ -263,10 +263,10 @@ def oos_r2(model: Fit, baseline: Fit, test: pl.DataFrame) -> dict:
 
 def summary(f: Fit) -> dict:
     r = f.result
-    names = ["const"] + f.columns
+    names = ["const", *f.columns]
     coef = {
         n: {"b": float(b), "se": float(se), "t": float(t), "p": float(p)}
-        for n, b, se, t, p in zip(names, r.params, r.bse, r.tvalues, r.pvalues)
+        for n, b, se, t, p in zip(names, r.params, r.bse, r.tvalues, r.pvalues, strict=True)
     }
     return {"nobs": int(r.nobs), "r2": float(r.rsquared), "coef": coef}
 

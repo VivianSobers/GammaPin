@@ -1,6 +1,6 @@
 """NSE participant-wise open interest (Client, DII, FII, Pro, TOTAL) and the S1/S2 weights built from it.
 
-Source: https://archives.nseindia.com/content/nsccl/fao_participant_oi_DDMMYYYY.csv (needs a browser
+Source: https://nsearchives.nseindia.com/content/nsccl/fao_participant_oi_DDMMYYYY.csv (needs a browser
 User-Agent). One file per trading day; a 404 means no trading that day. Files are cached as-is in
 `research/cache/participant_oi/`.
 
@@ -24,7 +24,7 @@ from pathlib import Path
 import polars as pl
 import requests
 
-URL = "https://archives.nseindia.com/content/nsccl/fao_participant_oi_{stamp}.csv"
+URL = "https://nsearchives.nseindia.com/content/nsccl/fao_participant_oi_{stamp}.csv"
 CACHE_DIR = Path(__file__).resolve().parent / "cache" / "participant_oi"
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "

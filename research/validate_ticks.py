@@ -27,12 +27,13 @@ import polars as pl
 
 import gp_quant as gp
 import gpdata
+import participant_oi
 
 ROOT = Path(__file__).resolve().parent.parent
 MERGED = ROOT / "data" / "merged"
 OUTPUT = Path(__file__).resolve().parent / "output"
 IST = dt.timezone(dt.timedelta(hours=5, minutes=30))
-EPOCH = dt.datetime(1970, 1, 1, tzinfo=dt.timezone.utc)
+EPOCH = dt.datetime(1970, 1, 1, tzinfo=dt.UTC)
 DECISION = dt.time(14, 0)
 
 
@@ -118,14 +119,14 @@ def analyze_ticks_at(
 
 def gex_agreement(k_tick: np.ndarray, g_tick: np.ndarray, k_candle: np.ndarray, g_candle: np.ndarray) -> dict:
     """Pearson correlation and relative L1 of the two GEX vectors on their common strikes."""
-    common, it, ic = np.intersect1d(k_tick, k_candle, return_indices=True)
+    _, it, ic = np.intersect1d(k_tick, k_candle, return_indices=True)
     a, b = np.asarray(g_tick)[it], np.asarray(g_candle)[ic]
     ok = np.isfinite(a) & np.isfinite(b)
     a, b = a[ok], b[ok]
     corr = float(np.corrcoef(a, b)[0, 1]) if len(a) >= 2 and a.std() > 0 and b.std() > 0 else None
     denom = float(np.abs(a).sum())
     rel_l1 = float(np.abs(a - b).sum() / denom) if denom > 0 else None
-    return {"n_common": int(len(a)), "gex_corr": corr, "gex_rel_l1": rel_l1}
+    return {"n_common": len(a), "gex_corr": corr, "gex_rel_l1": rel_l1}
 
 
 def _diff(a: float | None, b: float | None) -> float | None:
@@ -156,7 +157,7 @@ def compare(tick: dict | None, candle: dict | None, names: list[str]) -> list[di
             "flip_diff": _diff(ct["flip"], cc["flip"]),
             "pin_tick": pin_t,
             "pin_candle": pin_c,
-            "pin_equal": pin_t == pin_c,
+            "pin_equal": None if pin_t is None and pin_c is None else pin_t == pin_c,
             "pin_dist": None if pin_t is None or pin_c is None else abs(pin_t - pin_c),
             "net_gex_tick": ct["net_gex"],
             "net_gex_candle": cc["net_gex"],
@@ -199,6 +200,7 @@ def validate(
     opts: pl.DataFrame,
     expiry: dt.date,
     times: list[dt.datetime],
+    *,
     r: float,
     weights: dict[str, tuple[float, float]],
     trading_days: list[dt.date],
@@ -239,7 +241,7 @@ def summarize(df: pl.DataFrame, day: dt.date, expiry: dt.date, decision: dt.time
         d = df.filter(pl.col("convention") == name)
         ok = d.filter(pl.col("tick_ok") & pl.col("candle_ok"))
 
-        def med(expr: pl.Expr) -> float | None:
+        def med(expr: pl.Expr, ok: pl.DataFrame = ok) -> float | None:
             return ok.select(expr.median()).item() if ok.height else None
 
         pins = ok["pin_equal"].drop_nulls()
@@ -288,8 +290,6 @@ def resolve_weights(names: list[str], day: dt.date) -> dict[str, tuple[float, fl
     """S0 is fixed; S1 and S2 come from participant OI dated strictly before `day`."""
     table = {"S0": tuple(gp.S0)}
     if set(names) - {"S0"}:
-        import participant_oi
-
         table = participant_oi.weights_for(day, participant_oi.load())
     unknown = [n for n in names if n not in table]
     if unknown:
@@ -317,7 +317,9 @@ def main() -> None:
     events = load_events(a.merged_dir, a.date)
     opts = pl.read_parquet(a.candles or gpdata.options_path(a.expiry))
     times = time_grid(a.date, a.start, a.end, a.step)
-    df = validate(events, opts, a.expiry, times, a.r, weights, weekdays(a.date, a.expiry, holidays))
+    df = validate(
+        events, opts, a.expiry, times, r=a.r, weights=weights, trading_days=weekdays(a.date, a.expiry, holidays)
+    )
 
     a.out.mkdir(parents=True, exist_ok=True)
     csv, md = a.out / f"validate_{a.date.isoformat()}.csv", a.out / f"validate_{a.date.isoformat()}.md"

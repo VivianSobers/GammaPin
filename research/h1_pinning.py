@@ -19,8 +19,8 @@ import argparse
 import datetime as dt
 import json
 import math
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 import numpy as np
 import polars as pl
@@ -82,7 +82,7 @@ def predictions(out: dict | None, ch: dict, weights: dict[str, tuple[float, floa
         row |= {f"w_c_{c}": float(w_c), f"w_p_{c}": float(w_p), f"net_gex_{c}": math.nan, f"flip_{c}": math.nan, f"pin_{c}": math.nan}
     if out is not None:
         row |= {"forward": float(out["forward"]), "quotes_used": int(out["quotes_used"]), "quotes_total": int(out["quotes_total"])}
-        for c, conv in zip(names, out["conventions"]):
+        for c, conv in zip(names, out["conventions"], strict=True):
             row |= {f"net_gex_{c}": float(conv["net_gex"]), f"flip_{c}": nan_if_none(conv["flip"]), f"pin_{c}": nan_if_none(conv["pin"])}
     row["max_pain"] = baselines.max_pain(ch.get("strike", []), ch.get("call_oi", []), ch.get("put_oi", []))
     row["nearest_100"] = baselines.nearest_multiple(row["forward"], 100.0)
