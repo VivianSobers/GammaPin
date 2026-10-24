@@ -204,6 +204,10 @@ mod tests {
             }),
         )]);
         assert!(updates(&resp).is_empty());
+    }
+
+    #[test]
+    fn rejects_garbage_bytes() {
         assert!(decode_frame(&[0xFF, 0xFF, 0xFF]).is_err());
     }
 }

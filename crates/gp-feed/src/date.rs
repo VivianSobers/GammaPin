@@ -39,7 +39,8 @@ impl Date {
     pub fn parse(s: &str) -> Option<Self> {
         let mut it = s.split('-');
         let (y, m, d) = (it.next()?, it.next()?, it.next()?);
-        if it.next().is_some() || y.len() != 4 || m.len() != 2 || d.len() != 2 {
+        let digits = |p: &str, n: usize| p.len() == n && p.bytes().all(|b| b.is_ascii_digit());
+        if it.next().is_some() || !digits(y, 4) || !digits(m, 2) || !digits(d, 2) {
             return None;
         }
         let (y, m, d) = (y.parse().ok()?, m.parse().ok()?, d.parse().ok()?);
@@ -94,7 +95,7 @@ mod tests {
     }
 
     #[test]
-    fn round_trip_every_day_for_a_century() {
+    fn round_trip_1915_to_2079() {
         for n in -20_000..40_000 {
             let (y, m, d) = Date(n).ymd();
             assert_eq!(Date::from_ymd(y, m, d), Date(n));
@@ -110,6 +111,8 @@ mod tests {
             "2026-1-01",
             "20261019",
             "2026-10-19-1",
+            "+026-10-19",
+            "2026-+1-19",
             "",
         ] {
             assert_eq!(Date::parse(bad), None, "{bad}");

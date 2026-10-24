@@ -57,7 +57,9 @@ fn mixed() {
     check("mixed");
 }
 
+/// A market_info-only frame with an unknown field: it must still decode (to no updates).
+/// The MarketInfo content itself is not rendered.
 #[test]
-fn market_info() {
+fn market_info_unknown_field() {
     check("market_info");
 }

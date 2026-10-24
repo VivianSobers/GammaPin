@@ -86,14 +86,20 @@ pub enum ConfigError {
     Parse(PathBuf, toml::de::Error),
     #[error("bad time {0:?}, expected HH:MM")]
     Time(String),
+    #[error("capture window {0}-{1} does not open before it closes")]
+    Window(String, String),
 }
 
 /// `HH:MM` to minutes after midnight.
 pub fn parse_hhmm(s: &str) -> Result<f64, ConfigError> {
     let bad = || ConfigError::Time(s.to_string());
     let (h, m) = s.split_once(':').ok_or_else(bad)?;
+    let two_digits = |p: &str| p.len() == 2 && p.bytes().all(|b| b.is_ascii_digit());
+    if !(two_digits(h) && two_digits(m)) {
+        return Err(bad());
+    }
     let (h, m): (u32, u32) = (h.parse().map_err(|_| bad())?, m.parse().map_err(|_| bad())?);
-    if h > 23 || m > 59 || s.len() != 5 {
+    if h > 23 || m > 59 {
         return Err(bad());
     }
     Ok(f64::from(h * 60 + m))
@@ -105,12 +111,14 @@ impl Config {
         toml::from_str(&text).map_err(|e| ConfigError::Parse(path.into(), e))
     }
 
-    /// Capture window as minutes after IST midnight.
+    /// Capture window as minutes after IST midnight; it must open before it closes.
     pub fn window(&self) -> Result<(f64, f64), ConfigError> {
-        Ok((
-            parse_hhmm(&self.capture.window_ist[0])?,
-            parse_hhmm(&self.capture.window_ist[1])?,
-        ))
+        let [open, close] = &self.capture.window_ist;
+        let (o, c) = (parse_hhmm(open)?, parse_hhmm(close)?);
+        if o >= c {
+            return Err(ConfigError::Window(open.clone(), close.clone()));
+        }
+        Ok((o, c))
     }
 
     pub fn writer_config(&self) -> gp_log::WriterConfig {
@@ -152,6 +160,9 @@ mod tests {
             cfg.log_dir(gp_feed::Date::from_ymd(2026, 10, 19)),
             PathBuf::from("data/A/2026-10-19")
         );
+        let mut reversed = cfg.clone();
+        reversed.capture.window_ist = ["15:40".into(), "09:00".into()];
+        assert!(matches!(reversed.window(), Err(ConfigError::Window(..))));
     }
 
     #[test]
@@ -168,7 +179,7 @@ mod tests {
     #[test]
     fn hhmm() {
         assert_eq!(parse_hhmm("09:15").unwrap(), 555.0);
-        for bad in ["9:15", "24:00", "09:60", "0915", "aa:bb"] {
+        for bad in ["9:15", "24:00", "09:60", "0915", "aa:bb", "+9:15", "09:+5"] {
             assert!(parse_hhmm(bad).is_err(), "{bad}");
         }
     }

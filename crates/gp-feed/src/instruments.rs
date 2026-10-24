@@ -75,7 +75,7 @@ pub enum MasterError {
     Io(#[from] std::io::Error),
     #[error("json: {0}")]
     Json(#[from] serde_json::Error),
-    #[error("{0}: Nifty contract without expiry, lot size or (for an option) strike")]
+    #[error("{0}: Nifty contract without expiry, a positive lot size or (for an option) strike")]
     Incomplete(String),
 }
 
@@ -108,7 +108,12 @@ fn convert(r: Raw) -> Result<Option<Instrument>, MasterError> {
     if !nifty {
         return Ok(None);
     }
-    let (Some(expiry), Some(lot)) = (r.expiry, r.lot_size) else {
+    let (Some(expiry), Some(lot)) = (
+        r.expiry,
+        r.lot_size
+            .and_then(|l| i32::try_from(l).ok())
+            .filter(|&l| l > 0),
+    ) else {
         return Err(MasterError::Incomplete(r.instrument_key));
     };
     let strike = match (kind.is_option(), r.strike_price) {
@@ -122,7 +127,7 @@ fn convert(r: Raw) -> Result<Option<Instrument>, MasterError> {
         underlying: NIFTY.into(),
         kind,
         expiry: Some(Date::ist_from_unix_ms(expiry)),
-        lot_size: lot as i32,
+        lot_size: lot,
         tick_size: r.tick_size.map(rupees),
     }))
 }
@@ -250,6 +255,17 @@ mod tests {
             parse_master(missing),
             Err(MasterError::Incomplete(k)) if k == "NSE_FO|1"
         ));
+        for lot in ["0", "-65", "4294967296"] {
+            let bad_lot = format!(
+                r#"[{{"segment":"NSE_FO","name":"NIFTY","instrument_type":"FUT",
+                "instrument_key":"NSE_FO|3","underlying_key":"NSE_INDEX|Nifty 50",
+                "expiry":1792368000000,"lot_size":{lot}}}]"#
+            );
+            assert!(matches!(
+                parse_master(bad_lot.as_bytes()),
+                Err(MasterError::Incomplete(k)) if k == "NSE_FO|3"
+            ));
+        }
         assert!(parse_master(b"{").is_err());
     }
 }
