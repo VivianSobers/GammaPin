@@ -3,7 +3,7 @@
 use std::fmt;
 
 /// IST is UTC+05:30 all year.
-pub const IST_OFFSET_MS: i64 = 19_800_000;
+pub(crate) const IST_OFFSET_MS: i64 = 19_800_000;
 const MS_PER_DAY: i64 = 86_400_000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

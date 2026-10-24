@@ -9,7 +9,9 @@ pub struct Selection {
     pub expiries: usize,
     /// Half-width of the strike band around the reference, in percent.
     pub band_pct: f64,
-    /// Upper bound on the number of instruments, index and future included.
+    /// Upper bound on the number of instruments, index and future included. The index
+    /// and the nearest future are always selected, even when `max` is smaller; `max`
+    /// only limits how many option strikes are added after them.
     pub max: usize,
 }
 
@@ -98,8 +100,7 @@ mod tests {
             expiry: Some(expiry),
             strike: Some(strike),
             lot_size: 65,
-            tick_size: 0.05,
-            weekly: true,
+            tick_size: Some(0.05),
         }
     }
 
@@ -111,8 +112,7 @@ mod tests {
             expiry: None,
             strike: None,
             lot_size: 0,
-            tick_size: 0.05,
-            weekly: false,
+            tick_size: Some(0.05),
         }];
         let expiries = [
             Date::from_ymd(2026, 10, 13), // expired

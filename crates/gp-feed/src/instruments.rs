@@ -52,9 +52,8 @@ pub struct Instrument {
     pub strike: Option<f64>,
     /// Index units per contract; 0 for the index.
     pub lot_size: i32,
-    /// Rupees.
-    pub tick_size: f64,
-    pub weekly: bool,
+    /// Rupees; None when the master has no tick size (it has none for the index).
+    pub tick_size: Option<f64>,
 }
 
 #[derive(Deserialize)]
@@ -68,7 +67,6 @@ struct Raw {
     strike_price: Option<f64>,
     lot_size: Option<i64>,
     tick_size: Option<f64>,
-    weekly: Option<bool>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -81,6 +79,11 @@ pub enum MasterError {
     Incomplete(String),
 }
 
+/// Master tick size (paise) in rupees, rounded to clear float noise.
+fn rupees(tick: f64) -> f64 {
+    (tick * TICK_UNIT * 1e4).round() / 1e4
+}
+
 fn convert(r: Raw) -> Result<Option<Instrument>, MasterError> {
     if r.instrument_key == NIFTY_INDEX_KEY {
         return Ok(Some(Instrument {
@@ -90,8 +93,7 @@ fn convert(r: Raw) -> Result<Option<Instrument>, MasterError> {
             expiry: None,
             strike: None,
             lot_size: 0,
-            tick_size: r.tick_size.unwrap_or(0.0) * TICK_UNIT,
-            weekly: false,
+            tick_size: r.tick_size.map(rupees),
         }));
     }
     let nifty = r.segment.as_deref() == Some("NSE_FO")
@@ -121,8 +123,7 @@ fn convert(r: Raw) -> Result<Option<Instrument>, MasterError> {
         kind,
         expiry: Some(Date::ist_from_unix_ms(expiry)),
         lot_size: lot as i32,
-        tick_size: (r.tick_size.unwrap_or(5.0) * TICK_UNIT * 1e4).round() / 1e4,
-        weekly: r.weekly.unwrap_or(false),
+        tick_size: r.tick_size.map(rupees),
     }))
 }
 
@@ -215,9 +216,8 @@ mod tests {
         assert_eq!(c.expiry, Some(Date::from_ymd(2026, 10, 20)));
         assert_eq!(
             (c.strike, c.lot_size, c.tick_size),
-            (Some(25050.0), 65, 0.05)
+            (Some(25050.0), 65, Some(0.05))
         );
-        assert!(c.weekly);
         let fut = &ins[4];
         assert_eq!((fut.kind, fut.strike), (Kind::Fut, None));
         assert_eq!(fut.expiry, Some(Date::from_ymd(2026, 10, 27)));

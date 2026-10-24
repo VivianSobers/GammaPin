@@ -8,6 +8,7 @@ use gp_quant::time::{MINUTES_PER_YEAR, minutes_to_expiry, t_years};
 use serde_json::json;
 
 use crate::date::ist_minute_of_day;
+use crate::instruments::NIFTY;
 use crate::proto::{
     Feed, FeedResponse, FullFeed, IndexFullFeed, Ltpc, MarketFullFeed, MarketLevel, Quote,
     RequestMode, Type, feed::FeedUnion, full_feed::FullFeedUnion,
@@ -18,7 +19,7 @@ use crate::{DEPTH, Date, Instrument, Kind, NIFTY_INDEX_KEY};
 const FIRST_TOKEN: u32 = 700_000;
 
 /// Next `n` Tuesdays on or after `from` (weekly Nifty expiries, holidays ignored).
-pub fn tuesdays(from: Date, n: usize) -> Vec<Date> {
+pub(crate) fn tuesdays(from: Date, n: usize) -> Vec<Date> {
     let first = from.add_days((1 + 7 - from.weekday() as i32) % 7);
     (0..n).map(|i| first.add_days(7 * i as i32)).collect()
 }
@@ -34,13 +35,12 @@ pub fn universe(
 ) -> Vec<Instrument> {
     let mut out = vec![Instrument {
         key: NIFTY_INDEX_KEY.into(),
-        underlying: "NIFTY".into(),
+        underlying: NIFTY.into(),
         kind: Kind::Idx,
         expiry: None,
         strike: None,
         lot_size: 0,
-        tick_size: 0.0, // the real master has no tick size for the index
-        weekly: false,
+        tick_size: None, // the real master has no tick size for the index
     }];
     let lo = ((spot * (1.0 - band_pct / 100.0)) / step).ceil() as i64;
     let hi = ((spot * (1.0 + band_pct / 100.0)) / step).floor() as i64;
@@ -52,25 +52,23 @@ pub fn universe(
     for e in tuesdays(date, expiries) {
         out.push(Instrument {
             key: next_key(),
-            underlying: "NIFTY".into(),
+            underlying: NIFTY.into(),
             kind: Kind::Fut,
             expiry: Some(e),
             strike: None,
             lot_size: 65,
-            tick_size: 0.1,
-            weekly: false,
+            tick_size: Some(0.1),
         });
         for s in lo..=hi {
             for kind in [Kind::Ce, Kind::Pe] {
                 out.push(Instrument {
                     key: next_key(),
-                    underlying: "NIFTY".into(),
+                    underlying: NIFTY.into(),
                     kind,
                     expiry: Some(e),
                     strike: Some(s as f64 * step),
                     lot_size: 65,
-                    tick_size: 0.05,
-                    weekly: true,
+                    tick_size: Some(0.05),
                 });
             }
         }
@@ -90,11 +88,11 @@ pub fn master_json(instruments: &[Instrument]) -> Vec<u8> {
             kind => json!({
                 "segment": "NSE_FO", "name": "NIFTY", "exchange": "NSE",
                 "instrument_type": kind.as_str(), "instrument_key": i.key,
-                "underlying_key": NIFTY_INDEX_KEY, "weekly": i.weekly,
+                "underlying_key": NIFTY_INDEX_KEY, "weekly": i.kind.is_option(),
                 // 23:59:59 IST on the expiry day, as Upstox stamps it
                 "expiry": i.expiry.map(|e| e.ist_unix_ms(24.0 * 60.0) - 1_000),
                 "strike_price": i.strike.unwrap_or(0.0),
-                "lot_size": i.lot_size, "tick_size": (i.tick_size * 100.0).round(),
+                "lot_size": i.lot_size, "tick_size": i.tick_size.map(|t| (t * 100.0).round()),
             }),
         })
         .collect();
@@ -235,7 +233,8 @@ impl Market {
         }
     }
 
-    pub fn instruments(&self) -> &[Instrument] {
+    #[cfg(test)]
+    pub(crate) fn instruments(&self) -> &[Instrument] {
         &self.instruments
     }
 
@@ -266,8 +265,11 @@ impl Market {
 
     fn quote_feed(&mut self, idx: usize, fair: f64) -> MarketFullFeed {
         let ins = &self.instruments[idx];
-        let (tick, lot_size, is_option) =
-            (ins.tick_size.max(0.05), ins.lot_size, ins.kind.is_option());
+        let (tick, lot_size, is_option) = (
+            ins.tick_size.unwrap_or(0.05).max(0.05),
+            ins.lot_size,
+            ins.kind.is_option(),
+        );
         let lot = i64::from(lot_size.max(1));
         let ltp = round_to(fair.max(tick), tick);
         let half = round_to((ltp * 0.0025).max(tick), tick);
@@ -399,15 +401,12 @@ mod tests {
     }
 
     #[test]
-    fn same_seed_same_bytes() {
+    fn same_seed_same_frames() {
         use prost::Message;
         let (mut a, mut b) = (market(), market());
         for _ in 0..50 {
             let (fa, fb) = (a.next_frame(), b.next_frame());
             assert_eq!(fa, fb);
-            // map order differs between runs, but the decoded content does not
-            let (ua, ub) = (crate::updates(&fa), crate::updates(&fb));
-            assert_eq!(ua, ub);
             assert!(!fa.encode_to_vec().is_empty());
         }
     }

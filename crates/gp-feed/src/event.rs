@@ -96,8 +96,7 @@ mod tests {
             expiry: Some(Date::from_ymd(2026, 10, 20)),
             strike: Some(24_900.0),
             lot_size: 65,
-            tick_size: 0.05,
-            weekly: true,
+            tick_size: Some(0.05),
         }
     }
 
@@ -113,7 +112,6 @@ mod tests {
             bid_qty: [130, 65, 0, 0, 0],
             ask_px: [101.6, 0.0, 0.0, 0.0, 0.0],
             ask_qty: [195, 0, 0, 0, 0],
-            current_ts: 11,
         }
     }
 

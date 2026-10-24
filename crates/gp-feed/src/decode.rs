@@ -23,15 +23,13 @@ pub struct Update {
     pub bid_qty: [i64; DEPTH],
     pub ask_px: [f64; DEPTH],
     pub ask_qty: [i64; DEPTH],
-    /// Upstox server time of the frame, Unix ms.
-    pub current_ts: i64,
 }
 
 pub fn decode_frame(bytes: &[u8]) -> Result<FeedResponse, prost::DecodeError> {
     FeedResponse::decode(bytes)
 }
 
-fn blank(instrument_key: &str, current_ts: i64) -> Update {
+fn blank(instrument_key: &str) -> Update {
     Update {
         instrument_key: instrument_key.to_string(),
         ltt_ms: 0,
@@ -43,7 +41,6 @@ fn blank(instrument_key: &str, current_ts: i64) -> Update {
         bid_qty: [0; DEPTH],
         ask_px: [0.0; DEPTH],
         ask_qty: [0; DEPTH],
-        current_ts,
     }
 }
 
@@ -58,7 +55,7 @@ pub fn updates(resp: &FeedResponse) -> Vec<Update> {
         let Some(union) = &resp.feeds[key].feed_union else {
             continue;
         };
-        let mut u = blank(key, resp.current_ts);
+        let mut u = blank(key);
         let ltpc = match union {
             FeedUnion::Ltpc(l) => Some(l),
             FeedUnion::FirstLevelWithGreeks(f) => {
@@ -158,7 +155,7 @@ mod tests {
         )]);
         let u = &updates(&decode_frame(&resp.encode_to_vec()).unwrap())[0];
         assert_eq!((u.ltt_ms, u.ltp, u.ltq), (1_000, 10.05, 75));
-        assert_eq!((u.cum_volume, u.oi, u.current_ts), (5_000, 1_234.0, 99));
+        assert_eq!((u.cum_volume, u.oi), (5_000, 1_234.0));
         assert_eq!(u.bid_qty, [100, 101, 102, 103, 104]);
         assert_eq!(u.ask_px[4], 10.1 + 4.0 * 0.05);
     }
