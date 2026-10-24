@@ -10,7 +10,7 @@ DAYS = [D(2026, 10, 5), D(2026, 10, 7), D(2026, 10, 8), D(2026, 10, 12), D(2026,
 
 
 def load(day):
-    nxt = [e for e in (D(2026, 10, 6), D(2026, 10, 13), D(2026, 10, 20)) if e > day][0]
+    nxt = next(e for e in (D(2026, 10, 6), D(2026, 10, 13), D(2026, 10, 20)) if e > day)
     return pl.DataFrame({"date": [day, day, day], "expiry": [nxt, nxt, D(2026, 12, 29)]})
 
 

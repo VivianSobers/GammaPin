@@ -43,7 +43,7 @@ def test_wilcoxon_all_zero_and_empty():
     assert out == {**out, "statistic": 0.0, "pvalue": 1.0, "n": 3, "n_nonzero": 0}
     empty = stats.paired_wilcoxon([math.nan], [1.0])
     assert empty["n"] == 0 and math.isnan(empty["pvalue"])
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="equal length"):
         stats.paired_wilcoxon([1.0], [1.0, 2.0])
 
 
@@ -111,11 +111,14 @@ def test_blocks_widen_ci_for_autocorrelated_series():
 
 
 @pytest.mark.parametrize(
-    "x, b, kw",
-    [([], 1, {}), ([1.0, math.nan], 1, {}), ([1.0, 2.0], 3, {}), ([1.0, 2.0], 0, {}), ([1.0], 1, {"alpha": 1.0})],
+    "x, b, kw, msg",
+    [
+        ([], 1, {}, "non-empty"), ([1.0, math.nan], 1, {}, "non-finite"), ([1.0, 2.0], 3, {}, "block_length"),
+        ([1.0, 2.0], 0, {}, "block_length"), ([1.0], 1, {"alpha": 1.0}, "alpha"),
+    ],
 )
-def test_bootstrap_bad_input(x, b, kw):
-    with pytest.raises(ValueError):
+def test_bootstrap_bad_input(x, b, kw, msg):
+    with pytest.raises(ValueError, match=msg):
         stats.block_bootstrap_ci(x, b, seed=0, **kw)
 
 

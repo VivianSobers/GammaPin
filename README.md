@@ -191,14 +191,17 @@ intraday history that no free source provides. Full write-up:
 > and [forward/README.md](forward/README.md). This is only the build.
 
 ```bash
-# 1 — Rust workspace (stable toolchain, 2024 edition)
+# 1 — Rust workspace (stable toolchain, 2024 edition; Linux or macOS,
+#     gp-capture and gp-monitor use tokio::signal::unix)
 cargo test --workspace
 
-# 2 — Python bindings for the pricing core
-cd crates/gp-quant && maturin develop && cd ../..
+# 2 — Python bindings for the pricing core, in a virtual environment
+python -m venv .venv && source .venv/bin/activate
+pip install maturin -r research/requirements.txt
+pip install ./crates/gp-quant
 
 # 3 — research pipeline and its tests
-cd research && pip install -r requirements.txt && pytest
+cd research && pytest
 ```
 
 Raw NSE files are never committed (`research/cache/` is ignored); the fetchers

@@ -5,8 +5,8 @@ import pytest
 import requests
 
 pytest.importorskip("gp_quant")
-import fetch_expired as fe  # noqa: E402
-import gpdata  # noqa: E402
+import fetch_expired as fe
+import gpdata
 
 EXPIRY = dt.date(2025, 4, 24)
 SESSIONS = [dt.date(2025, 4, 22), dt.date(2025, 4, 23), EXPIRY]

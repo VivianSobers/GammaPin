@@ -34,7 +34,7 @@ def test_max_pain_bad_input():
     assert math.isnan(baselines.max_pain([], [], []))
     assert math.isnan(baselines.max_pain([100.0, 200.0], [0.0, 0.0], [0.0, 0.0]))
     assert baselines.max_pain([100.0, 200.0, 300.0], [math.nan, 0.0, 4.0], [3.0, 2.0, -1.0]) == 200.0
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="equal length"):
         baselines.max_pain([100.0], [1.0, 2.0], [1.0])
 
 
@@ -56,7 +56,7 @@ def test_nearest_multiple(x, step, want):
 
 def test_nearest_multiple_nan_and_bad_step():
     assert math.isnan(baselines.nearest_multiple(math.nan))
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="step must be positive"):
         baselines.nearest_multiple(1.0, 0)
 
 

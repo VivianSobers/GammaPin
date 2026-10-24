@@ -36,9 +36,8 @@ def world(minutes=MINUTES, start=START):
 def candles(oi_scale=None) -> pl.DataFrame:
     rows = []
     for ts, kind, px, oi in world():
-        if oi_scale is not None and kind == "CE":
-            oi = oi * oi_scale
-        for k, p, o in zip(STRIKES, px, oi):
+        scaled = oi * oi_scale if oi_scale is not None and kind == "CE" else oi
+        for k, p, o in zip(STRIKES, px, scaled, strict=True):
             rows.append((ts, f"K{k}{kind}", kind, k, p, p, p, p, 10, o, LOT))
     return pl.DataFrame(
         rows,

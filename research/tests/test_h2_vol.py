@@ -1,6 +1,7 @@
 import datetime as dt
 import json
 import math
+import re
 import sys
 import types
 
@@ -413,6 +414,6 @@ def test_include_incomplete_refused_for_test_split(cli, monkeypatch):
 
 def test_missing_coverage_summary_refuses(cli):
     (cli.cache / "coverage_summary.csv").unlink()
-    with pytest.raises(SystemExit, match="coverage_summary.csv not found"):
+    with pytest.raises(SystemExit, match=re.escape("coverage_summary.csv not found")):
         h2_vol.main(["--split", "train", "--out", str(cli.out)])
     assert not cli.out.exists()

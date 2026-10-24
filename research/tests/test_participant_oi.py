@@ -5,7 +5,7 @@ import pytest
 import requests
 
 pytest.importorskip("gp_quant")
-import participant_oi as poi  # noqa: E402
+import participant_oi as poi
 
 FIXTURE = Path(__file__).parent / "fixtures" / "participant_oi_sample.csv"
 DAY = dt.date(2025, 10, 10)

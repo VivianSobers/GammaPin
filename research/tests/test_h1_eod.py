@@ -82,11 +82,13 @@ def test_t_years_is_one_session_from_a_friday_eve():
 
 def test_features_cannot_see_settlement():
     assert not any("settle" in p for p in inspect.signature(h1_eod.features).parameters)
+    code = h1_eod.features.__code__
+    assert not any("settle" in n for n in code.co_names + code.co_varnames)  # nor reads a settlement global
 
 
 def test_features_find_forward_and_walls():
     e = dt.date(2026, 10, 13)
-    eve, f, cw, pw, _ = CASES[e]
+    eve, f, cw, _, _ = CASES[e]
     row = h1_eod.features(book()[eve], e, eve, R, weights(eve), DAYS)
     assert row["forward"] == pytest.approx(f, abs=0.5)
     assert row["pin_S0"] == cw
@@ -98,7 +100,7 @@ def test_features_refuse_rows_after_the_eve():
     e = dt.date(2026, 10, 13)
     eve = CASES[e][0]
     later = pl.concat([book()[eve], book()[e]])
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="bhavcopy rows dated after the eve"):
         h1_eod.features(later, e, eve, R, weights(eve), DAYS)
 
 
@@ -144,5 +146,5 @@ def test_main_train_split_end_to_end(tmp_path, monkeypatch):
 
 def test_main_test_split_requires_freeze(monkeypatch):
     monkeypatch.setattr(prereg, "git_tags", lambda pattern: "")
-    with pytest.raises(SystemExit):
+    with pytest.raises(SystemExit, match="not frozen"):
         h1_eod.main(["--split", "test"])

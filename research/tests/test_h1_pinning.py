@@ -2,6 +2,7 @@ import datetime as dt
 import inspect
 import json
 import math
+import re
 import sys
 import types
 
@@ -94,8 +95,8 @@ def cache(tmp_path, monkeypatch):
         return {"S0": (1.0, -1.0), "S1": S1, "S2": S2}
 
     fakes = {
-        "participant_oi": types.SimpleNamespace(load=lambda: pl.DataFrame(), weights_for=weights_for),
-        "rates": types.SimpleNamespace(load=lambda: pl.DataFrame(), rate_on=lambda day, df: R),
+        "participant_oi": types.SimpleNamespace(load=pl.DataFrame, weights_for=weights_for),
+        "rates": types.SimpleNamespace(load=pl.DataFrame, rate_on=lambda day, df: R),
         "settlements": types.SimpleNamespace(load=lambda: {e: c[3] for e, c in CASES.items()}),
     }
     for name, mod in fakes.items():
@@ -106,6 +107,8 @@ def cache(tmp_path, monkeypatch):
 def test_features_cannot_see_settlement():
     params = inspect.signature(h1_pinning.features).parameters
     assert not any("settle" in p or "target" in p for p in params)
+    code = h1_pinning.features.__code__
+    assert not any("settle" in n for n in code.co_names + code.co_varnames)
 
 
 def test_features_pins_and_baselines():
@@ -250,7 +253,7 @@ def test_test_split_refuses_tbd_even_when_tagged(cache, monkeypatch):
 
 
 def test_incomplete_expiries_excluded_before_split(cache):
-    e1, e2, e3 = sorted(CASES)
+    e1, _, e3 = sorted(CASES)
     # e3 incomplete; a complete expiry that is not cached is ignored; train fraction 0.5
     write_coverage(gpdata.EXPIRED, {e3: False, dt.date(2026, 10, 27): True})
     write_prereg(cache / "prereg.toml", train_fraction=0.5)
@@ -282,7 +285,7 @@ def test_include_incomplete_train_diagnostics(cache, capsys):
 
 def test_missing_coverage_summary_refuses(cache):
     (gpdata.EXPIRED / "coverage_summary.csv").unlink()
-    with pytest.raises(SystemExit, match="coverage_summary.csv not found"):
+    with pytest.raises(SystemExit, match=re.escape("coverage_summary.csv not found")):
         h1_pinning.main(["--split", "train", "--out", str(cache / "output")])
     assert not (cache / "output").exists()
 

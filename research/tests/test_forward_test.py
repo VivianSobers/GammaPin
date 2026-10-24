@@ -45,7 +45,7 @@ def test_predict_on_mock(tmp_path):
     copy = tmp_path / "fwd" / "2026-10-19_snapshot.json"
     assert ft.sha256_hex(copy.read_bytes()) == p["snapshot"]["sha256"]
     assert ft.verify(path)[0]
-    with pytest.raises(FileExistsError):
+    with pytest.raises(FileExistsError, match="a published prediction must not be replaced"):
         ft.predict(snapshot_file(tmp_path), EXPIRY, tmp_path / "fwd")
 
 
@@ -97,7 +97,7 @@ def test_window_warnings():
     assert ft.check_window(dt.datetime.combine(EXPIRY, dt.time(14, 4, 59), ft.IST), EXPIRY) == []
     assert ft.check_window(dt.datetime.combine(EXPIRY, dt.time(13, 54, 59), ft.IST), EXPIRY)
     assert ft.check_window(dt.datetime.combine(EXPIRY, dt.time(14, 30), ft.IST), EXPIRY)
-    utc = dt.datetime(2026, 10, 19, 8, 30, tzinfo=dt.timezone.utc)
+    utc = dt.datetime(2026, 10, 19, 8, 30, tzinfo=dt.UTC)
     assert ft.check_window(utc, EXPIRY) == []
     assert ft.check_window(dt.datetime.combine(EXPIRY, dt.time(15, 0), ft.IST), EXPIRY)
 
@@ -178,7 +178,7 @@ def test_eod_payload_refuses_when_the_true_eve_is_not_cached():
 
 
 def test_eod_payload_predicts_from_the_eve_and_seals():
-    payload, (eve, f, cw, _, settle) = _eod_payload(dt.datetime(2026, 10, 12, 20, 0, tzinfo=ft.IST))
+    payload, (eve, _, cw, _, settle) = _eod_payload(dt.datetime(2026, 10, 12, 20, 0, tzinfo=ft.IST))
     assert payload["eve"] == eve.isoformat() and payload["design"] == "eod"
     assert payload["conventions"]["S0"]["pin"] == cw
     assert payload["baselines"]["nearest_100"] == 25_000.0 and payload["baselines"]["max_pain"] is not None
@@ -190,7 +190,7 @@ def test_eod_payload_predicts_from_the_eve_and_seals():
 
 
 def test_eod_payload_refuses_after_the_close_and_warns_after_the_open():
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="not before the 2026-10-13 15:30 close"):
         _eod_payload(dt.datetime(2026, 10, 13, 15, 30, tzinfo=ft.IST))
     payload, _ = _eod_payload(dt.datetime(2026, 10, 13, 10, 0, tzinfo=ft.IST))
     assert payload["warnings"]
