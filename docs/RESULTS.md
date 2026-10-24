@@ -1,6 +1,6 @@
 # Does gamma exposure pin Nifty at expiry? (G7.5)
 
-**Short answer: no.** On 94 Nifty weekly expiries, split 66 training and 28 test before any outcome was computed, the strike with the largest positive gamma exposure (GEX) at the expiry-eve close is never a better guess of the settlement than a simple baseline. Under the US sign convention it is significantly worse. The first forward test (19 Oct 2026) confirms the pattern: S0 was 311 points off, while S1/S2 missed by 111, still worse than max pain's 161 (see [Forward test](#forward-test)).
+**Short answer: no.** On 94 Nifty weekly expiries, split 66 training and 28 test before any outcome was computed, the strike with the largest positive gamma exposure (GEX) at the expiry-eve close is never significantly better a guess of the settlement than the best simple baseline. Under the US sign convention it is significantly worse. In the first forward test (19 Oct 2026) S0 missed by 311 points, while S1/S2 missed by 111, closer than max pain (161), nearest 100 (211) and no move (215); one expiry cannot confirm or reject H1 (see [Forward test](#forward-test)).
 
 ## Question
 
@@ -41,7 +41,7 @@ Everything below was fixed in [PREREGISTRATION.md](../PREREGISTRATION.md) and ta
 | nearest 100 | 146.2 | 66 | 154.3 | 28 |
 | no move | **145.4** | 66 | 154.7 | 28 |
 
-Bold marks each split's best baseline: no move on the training set, max pain on the test set. One training eve has no earlier participant OI file, so S1 and S2 have n = 65 there.
+Bold marks each split's best baseline: no move on the training set, max pain on the test set. On one training eve (5 Feb 2025) both S1 weights and both S2 weights are negative, so no strike has positive GEX and there is no pin; S1 and S2 have n = 65 there.
 
 ### Pre-registered test: GEX pin minus best baseline
 
@@ -50,20 +50,20 @@ Positive differences mean the pin is worse. CIs from 10,000 moving-block bootstr
 | Convention | Split | Difference | 95% CI | Wilcoxon p | Supports H1 |
 |---|---|---|---|---|---|
 | S0 | train | +56.2 | [+28.1, +80.6] | 0.0009 | No, significantly worse |
-| S1 | train | +18.8 | [−1.6, +51.0] | 0.135 | No |
+| S1 | train | +18.9 | [−1.6, +51.0] | 0.135 | No |
 | S2 | train | +20.1 | [+0.4, +51.9] | 0.086 | No |
 | S0 | test | +83.0 | [+45.3, +127.0] | 0.0079 | No, significantly worse |
 | S1 | test | +8.7 | [−41.3, +35.0] | 0.793 | No |
 | S2 | test | +8.7 | [−41.3, +35.0] | 0.793 | No |
 
-**H1 is not supported.** No convention meets the bar on either split, and the effect never points the right way: every difference is positive.
+**H1 is not supported.** No convention meets the bar on either split, and every difference against the split's best baseline is positive. (On the test set S1/S2 are 0.8 and 1.2 points better than nearest 100 and no move, far from significant.)
 
 Per-run detail: [RESULTS_H1_TRAIN.md](RESULTS_H1_TRAIN.md), [RESULTS_H1_TEST.md](RESULTS_H1_TEST.md), and `research/output/h1_eod_test.csv`.
 
 ## What the results say
 
 1. **The US convention is the worst predictor tested.** The S0 pin is significantly worse than the best baseline on both splits, and than every baseline on the test set: on average 83 points further from settlement than max pain. A pin read off a Nifty GEX chart built on the US sign assumption does worse than assuming the index will not move.
-2. **Signing by real positioning removes most of that damage, but does not add skill.** S1 and S2 sit within a few points of the baselines, with CIs that straddle 0. They are as good as a round number, not better.
+2. **Signing by real positioning removes most of that damage, but does not add skill.** S1 and S2 sit about 19–20 points above the best baseline on the training set (S2's CI lies just above 0) and about 9 points above it on the test set, where the CIs straddle 0. They are as good as a round number, not better.
 3. **The baselines are hard to beat and hard to separate.** No move, nearest 100 and max pain are within 15 points of each other on both splits, and which one is best changes between splits. A typical miss is 125–135 points for all of them (test-set medians), so a one-session-ahead pin call has a wide error whichever method makes it.
 
 ## Descriptive notes (not pre-registered)
@@ -103,7 +103,7 @@ The H1 predictions for **expiry 1 (Mon 19 Oct 2026)** and **expiry 2 (Tue 27 Oct
 - **Eve close, not expiry-day 14:00.** The first design predicted from 14:00 on expiry day, closer to the event. Intraday data was not freely available, so the decision moved to the eve close, one full session before settlement ([PREREGISTRATION.md](../PREREGISTRATION.md), "Design change before the freeze"). Pinning that only shows up in the last hours of expiry day would not be seen here.
 - **Close prices, not a snapshot.** `ClsPric` is NSE's closing price for each option, and untraded strikes are dropped. The chain is a close-period approximation.
 - **Participant OI is not per strike.** S1 and S2 apply one sign pair across all strikes, from positions in all NSE index options, not Nifty alone.
-- **Sample size.** 28 test expiries give wide CIs: on S1 the test CI spans about 76 points. A small real effect could be missed. The direction of every estimate, though, is against H1.
+- **Sample size.** 28 test expiries give wide CIs: on S1 the test CI spans about 76 points. A small real effect could be missed. Every pre-registered comparison against the best baseline, though, points against H1.
 - **No live capture.** The study uses no tick data and does not validate GEX from the end-of-day chain against intraday chains (G6.2 dropped).
 
 ## Reproduce

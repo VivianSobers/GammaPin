@@ -16,8 +16,8 @@ India's participant-wise positioning, and forward-tests on expiry day with a
 public, timestamped prediction. No broker account: NSE and RBI files only.
 
 **Short answer: no.** On 94 Nifty weekly expiries, the strike with the largest
-positive GEX at the expiry-eve close is never a better guess of the settlement
-than a simple baseline. Under the US sign convention it is significantly worse.
+positive GEX at the expiry-eve close is never significantly better a guess of the
+settlement than the best simple baseline. Under the US sign convention it is significantly worse.
 
 ---
 
@@ -172,14 +172,14 @@ Chronological split: 66 training expiries to 30 Mar 2026, 28 test expiries from
 | Convention | Split | Pin − best baseline | 95% CI | Wilcoxon p | Supports H1 |
 |---|---|---:|---|---:|---|
 | S0 | train | +56.2 | [+28.1, +80.6] | 0.0009 | No, significantly worse |
-| S1 | train | +18.8 | [−1.6, +51.0] | 0.135 | No |
+| S1 | train | +18.9 | [−1.6, +51.0] | 0.135 | No |
 | S2 | train | +20.1 | [+0.4, +51.9] | 0.086 | No |
 | S0 | test | +83.0 | [+45.3, +127.0] | 0.0079 | No, significantly worse |
 | S1 | test | +8.7 | [−41.3, +35.0] | 0.793 | No |
 | S2 | test | +8.7 | [−41.3, +35.0] | 0.793 | No |
 
 **H1 is not supported.** No convention meets the bar on either split, and every
-difference is positive. **H2** (volatility regime) is not tested: it needs
+difference against the split's best baseline is positive. **H2** (volatility regime) is not tested: it needs
 intraday history that no free source provides. Full write-up:
 [docs/RESULTS.md](docs/RESULTS.md).
 
