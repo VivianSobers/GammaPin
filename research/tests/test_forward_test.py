@@ -157,14 +157,29 @@ def test_score_reads_settlements_lazily(tmp_path, monkeypatch):
 
 # --- end-of-day design ---------------------------------------------------------------------------
 
-def _eod_payload(created_at, weights_for=None):
+def _eod_payload(created_at, weights_for=None, calendar=()):
     import test_h1_eod as eod
 
     b = eod.book()
     e = dt.date(2026, 10, 13)
     return ft.build_eod_payload(
-        e, created_at, sorted(b), eod.loader(b), weights_for or eod.weights, lambda d: eod.R, "ab" * 32
+        e, created_at, sorted(b), eod.loader(b), weights_for or eod.weights, lambda d: eod.R, "ab" * 32,
+        calendar=calendar,
     ), eod.CASES[e]
+
+
+def test_eod_payload_refuses_when_the_true_eve_is_not_cached():
+    import test_h1_eod as eod
+
+    b, e = eod.book(), dt.date(2026, 10, 13)
+    eve = eod.CASES[e][0]
+    created = dt.datetime(2026, 10, 12, 20, 0, tzinfo=ft.IST)
+    days = [d for d in sorted(b) if d != eve]  # the eve's file was never downloaded
+    with pytest.raises(LookupError, match=f"{eve} is not cached"):
+        ft.build_eod_payload(e, created, days, eod.loader(b), eod.weights, lambda d: eod.R, "ab" * 32,
+                             calendar=[eve])
+    payload, _ = _eod_payload(created, calendar=[eve - dt.timedelta(days=3), e])
+    assert payload["eve"] == eve.isoformat()  # days outside (eve, expiry) change nothing
 
 
 def test_eod_payload_predicts_from_the_eve_and_seals():

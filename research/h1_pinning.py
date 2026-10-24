@@ -207,7 +207,34 @@ def evaluate(table: pl.DataFrame, block_length: int, resamples: int, seed: int) 
                 "bootstrap": boot,
                 "note": None if boot else f"bootstrap skipped: {n} pairs < block_length {block_length}",
             })
-    return {"n_expiries": t.height, "mae": mae, "comparisons": comparisons}
+    return {"n_expiries": t.height, "mae": mae, "comparisons": comparisons, "criterion": criterion(comparisons)}
+
+
+def criterion(comparisons: list[dict], alpha: float = 0.05) -> dict:
+    """The pre-registered H1 verdict (PREREGISTRATION.md, H1 success criterion).
+
+    Per convention, the best baseline is the one with the lowest MAE on that convention's paired expiries.
+    The convention supports H1 when the bootstrap CI of the difference lies entirely below 0 and the
+    Wilcoxon p-value is below alpha / 3 (Bonferroni over the conventions). H1 is supported if any convention is.
+    """
+    bar = alpha / len(GEX_METHODS)
+    out = {}
+    for g in GEX_METHODS:
+        comps = [c for c in comparisons if c["gex"] == g and math.isfinite(c["mae_baseline"])]
+        if not comps:
+            out[g] = {"best_baseline": None, "supported": False}
+            continue
+        best = min(comps, key=lambda c: c["mae_baseline"])
+        boot, p = best["bootstrap"], best["wilcoxon"]["pvalue"]
+        out[g] = {
+            "best_baseline": best["baseline"],
+            "n": best["n"],
+            "difference": best["mae_gex"] - best["mae_baseline"],
+            "ci": [boot["lo"], boot["hi"]] if boot else None,
+            "pvalue": p,
+            "supported": bool(boot is not None and boot["hi"] < 0 and p < bar),
+        }
+    return {"pvalue_bar": bar, "conventions": out, "h1_supported": any(v["supported"] for v in out.values())}
 
 
 def jsonable(x):

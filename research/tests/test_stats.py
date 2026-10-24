@@ -18,6 +18,20 @@ def test_wilcoxon_matches_scipy_on_abs_errors():
     assert out["pvalue"] == pytest.approx(ref.pvalue)
 
 
+def test_wilcoxon_method_is_fixed_not_scipy_auto():
+    # Heavily tied differences, as |err| on round strikes give: the normal approximation with tie
+    # correction, whatever SciPy's own "auto" rule would pick.
+    d = np.array([50.0, -50.0, 100.0, 50.0, -100.0, 50.0, 150.0, 50.0, -50.0, 100.0, 50.0, 100.0,
+                  -50.0, 50.0, 100.0, 50.0, -150.0, 50.0, 100.0, 50.0])
+    out = stats.paired_wilcoxon(np.maximum(d, 0), np.maximum(-d, 0))  # |a| - |b| = d
+    ref = sps.wilcoxon(d, method="asymptotic")
+    assert stats.wilcoxon_method(d) == "asymptotic"
+    assert out["pvalue"] == pytest.approx(ref.pvalue, rel=1e-12)
+    assert stats.wilcoxon_method(np.arange(1.0, 31.0)) == "exact"
+    assert stats.wilcoxon_method(np.arange(1.0, 52.0)) == "asymptotic"
+    assert isinstance(stats.wilcoxon_method(np.array([1.0, -1.0, 2.0])), sps.PermutationMethod)
+
+
 def test_wilcoxon_uses_absolute_errors_and_drops_nan_pairs():
     out = stats.paired_wilcoxon([-10.0, 20.0, math.nan, 5.0], [10.0, -20.0, 1.0, 4.0])
     assert out["n"] == 3 and out["n_nonzero"] == 1

@@ -175,8 +175,28 @@ def test_evaluate_hand_computed():
     assert s0["bootstrap"]["mean"] == pytest.approx(-8.0) and s0["bootstrap"]["hi"] < 0
     assert s0["wilcoxon"]["n"] == 6 and s0["wilcoxon"]["pvalue"] < 0.05
     assert cmp[("pin_S1", "no_move")]["n"] == 5 and cmp[("pin_S1", "no_move")]["n_excluded"] == 1
+    crit = out["criterion"]
+    assert crit["pvalue_bar"] == pytest.approx(0.05 / 3)
+    # Every baseline ties at MAE 10, so the first listed (max pain) is the best; S0's p = 0.031 > 0.0167.
+    assert crit["conventions"]["pin_S0"]["best_baseline"] == "max_pain"
+    assert crit["conventions"]["pin_S0"]["supported"] is False and crit["h1_supported"] is False
     short = h1_pinning.evaluate(table.head(1), block_length=2, resamples=10, seed=1)
     assert short["comparisons"][0]["bootstrap"] is None and "skipped" in short["comparisons"][0]["note"]
+
+
+def test_criterion_picks_best_baseline_and_applies_bonferroni():
+    def comp(g, b, mae_b, hi, p):
+        return {"gex": g, "baseline": b, "n": 30, "mae_gex": 100.0, "mae_baseline": mae_b,
+                "bootstrap": {"lo": hi - 20, "hi": hi}, "wilcoxon": {"pvalue": p}}
+
+    comps = [comp("pin_S0", "max_pain", 150.0, -1.0, 0.001), comp("pin_S0", "no_move", 120.0, -1.0, 0.02)]
+    comps += [comp("pin_S1", "max_pain", 130.0, -5.0, 0.01), comp("pin_S1", "no_move", 140.0, 3.0, 0.5)]
+    out = h1_pinning.criterion(comps)
+    s0, s1 = out["conventions"]["pin_S0"], out["conventions"]["pin_S1"]
+    assert s0["best_baseline"] == "no_move" and s0["supported"] is False  # p 0.02 >= 0.05/3
+    assert s1["best_baseline"] == "max_pain" and s1["supported"] is True
+    assert out["conventions"]["pin_S2"] == {"best_baseline": None, "supported": False}
+    assert out["h1_supported"] is True
 
 
 def test_end_to_end_train(cache, capsys):

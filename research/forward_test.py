@@ -99,8 +99,14 @@ def build_eod_payload(
     weights_for,
     rate_on,
     source_sha256: str,
+    calendar=(),
 ) -> dict:
-    """The end-of-day prediction from the eve's bhavcopy (h1_eod.features), with max pain."""
+    """The end-of-day prediction from the eve's bhavcopy (h1_eod.features), with max pain.
+
+    `calendar` is an independent list of trading days (participant OI and index-close files). If one of
+    them falls strictly between the last cached bhavcopy and the expiry, the true eve's bhavcopy is
+    missing and the prediction is refused rather than made from an older day.
+    """
     import bhavcopy
     import h1_eod
 
@@ -108,6 +114,9 @@ def build_eod_payload(
     if expiry not in eves:
         raise LookupError(f"no cached bhavcopy before {expiry}")
     eve = eves[expiry]
+    skipped = sorted(d for d in calendar if eve < d < expiry)
+    if skipped:
+        raise LookupError(f"bhavcopy for trading day {skipped[-1]} is not cached; the eve would fall back to {eve}")
     local = created_at.astimezone(IST)
     close = dt.datetime.combine(expiry, dt.time(15, 30), IST)
     if local >= close:
@@ -155,6 +164,7 @@ def predict_eod(expiry: dt.date, out: Path = FORWARD, force: bool = False) -> Pa
     import bhavcopy
     import participant_oi
     import rates
+    import settlements
 
     days = bhavcopy.cached_days()
     eve = bhavcopy.eves(days, [expiry]).get(expiry)
@@ -165,6 +175,7 @@ def predict_eod(expiry: dt.date, out: Path = FORWARD, force: bool = False) -> Pa
         expiry, dt.datetime.now(dt.timezone.utc), days, bhavcopy.load,
         lambda d: participant_oi.weights_for(d, poi), lambda d: rates.rate_on(d, rate_df),
         sha256_hex(bhavcopy.path_for(eve).read_bytes()),
+        calendar=set(poi["date"].to_list()) | set(settlements.load()),
     )
     path = prediction_path(out, expiry)
     if path.exists() and not force:
@@ -204,10 +215,19 @@ def predict(snapshot_file: Path, expiry: dt.date, out: Path = FORWARD, force: bo
 
 
 def verify(path: Path) -> tuple[bool, list[str]]:
-    """Payload hash check, plus the snapshot copy's hash when the copy is present."""
+    """Payload hash check, plus the snapshot copy's or the cached eve bhavcopy's hash when present."""
     record = json.loads(path.read_text(encoding="utf-8"))
     ok, msgs = verify_record(record), []
     msgs.append(f"payload sha256 {'OK' if ok else 'MISMATCH'}: {record.get('sha256')}")
+    source = record["payload"].get("source") or {}
+    if record["payload"].get("design") == "eod" and source.get("bhavcopy"):
+        import bhavcopy
+
+        cached = bhavcopy.CACHE_DIR / source["bhavcopy"]
+        if cached.exists():
+            same = sha256_hex(cached.read_bytes()) == source.get("sha256")
+            ok &= same
+            msgs.append(f"eve bhavcopy {cached.name} {'OK' if same else 'MISMATCH'}")
     copy = path.with_name(path.stem + "_snapshot.json")
     if copy.exists():
         same = sha256_hex(copy.read_bytes()) == record["payload"]["snapshot"]["sha256"]

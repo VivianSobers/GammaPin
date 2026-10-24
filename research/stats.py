@@ -17,6 +17,10 @@ def paired_wilcoxon(err_a, err_b) -> dict:
     Pairs where either error is non-finite are dropped. Zero differences are dropped
     (zero_method="wilcox"); when every difference is zero the test is undefined and the
     result is statistic 0, p-value 1. With no pairs at all both are NaN.
+
+    The method is chosen here, not by SciPy's "auto" (whose rule changed between versions):
+    exact without ties up to 50 pairs, an exhaustive permutation test with ties up to 13,
+    otherwise the tie-corrected normal approximation.
     """
     a = np.abs(np.asarray(err_a, dtype=np.float64))
     b = np.abs(np.asarray(err_b, dtype=np.float64))
@@ -31,8 +35,18 @@ def paired_wilcoxon(err_a, err_b) -> dict:
         return {**out, "statistic": math.nan, "pvalue": math.nan}
     if nonzero == 0:
         return {**out, "statistic": 0.0, "pvalue": 1.0}
-    res = sps.wilcoxon(d[d != 0], alternative="two-sided", zero_method="wilcox")
+    x = d[d != 0]
+    res = sps.wilcoxon(x, alternative="two-sided", zero_method="wilcox", method=wilcoxon_method(x))
     return {**out, "statistic": float(res.statistic), "pvalue": float(res.pvalue)}
+
+
+def wilcoxon_method(x: np.ndarray):
+    """SciPy >= 1.11 'auto' rule, fixed: exact (n <= 50, no ties), permutation (n <= 13, ties), else asymptotic."""
+    n = x.size
+    ties = np.unique(np.abs(x)).size < n
+    if n > 50 or (ties and n > 13):
+        return "asymptotic"
+    return sps.PermutationMethod() if ties else "exact"
 
 
 def block_indices(n: int, block_length: int, resamples: int, rng: np.random.Generator) -> np.ndarray:
