@@ -67,8 +67,10 @@ pub fn carries_data(payload: &[u8]) -> bool {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Outcome {
     pub end: End,
-    /// Data frames written on this connection.
+    /// Frames written on this connection, the `market_info` greeting included.
     pub frames: u64,
+    /// Of those, frames that carry market data ([`carries_data`]).
+    pub data_frames: u64,
 }
 
 /// Run one connection to `url` until it ends or `stop` becomes true.
@@ -82,8 +84,14 @@ pub async fn run_connection(
     opts: ConnOpts,
     stop: &mut watch::Receiver<bool>,
 ) -> Result<Outcome, LogError> {
-    let mut frames = 0;
-    let done = |end| Ok(Outcome { end, frames: 0 });
+    let (mut frames, mut data_frames) = (0, 0);
+    let done = |end| {
+        Ok(Outcome {
+            end,
+            frames: 0,
+            data_frames: 0,
+        })
+    };
     let ws = tokio::select! {
         _ = stopped(stop) => return done(End::Stopped),
         r = tokio::time::timeout(opts.stall, tokio_tungstenite::connect_async(url)) => match r {
@@ -122,21 +130,28 @@ pub async fn run_connection(
                     Some(Ok(_)) => continue, // ping/pong: alive, nothing to record
                 };
                 rec.raw_frame(&payload)?;
-                if rec.in_gap() && carries_data(&payload) {
-                    rec.gap_end()?;
-                }
                 frames += 1;
+                if carries_data(&payload) {
+                    data_frames += 1;
+                    if rec.in_gap() {
+                        rec.gap_end()?;
+                    }
+                }
                 for req in sub.on_frame(&payload) {
                     rec.subscribe(&req)?;
                     if let Err(e) = sink.send(Message::Binary(req.into())).await {
-                        return Ok(Outcome { end: End::Failed(e.to_string()), frames });
+                        return Ok(Outcome { end: End::Failed(e.to_string()), frames, data_frames });
                     }
                 }
             }
         }
     };
     rec.flush()?;
-    Ok(Outcome { end, frames })
+    Ok(Outcome {
+        end,
+        frames,
+        data_frames,
+    })
 }
 
 #[cfg(test)]
@@ -222,6 +237,7 @@ mod tests {
         // only the market_info greeting could arrive before the silence
         assert_eq!(out.end, End::Stalled);
         assert!(out.frames <= 1);
+        assert_eq!(out.data_frames, 0);
 
         feed.cut(Fault::Drop);
         let out = run_connection(&feed.url(), &mut sub, &mut rec, opts(300), &mut rx)

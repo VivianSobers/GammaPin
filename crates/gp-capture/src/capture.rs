@@ -1,5 +1,6 @@
 //! The capture loop: connect, record, and on any failure write `GAP_START`, back off,
-//! reconnect and resubscribe. The first frame after a reconnect writes `GAP_END`.
+//! reconnect and resubscribe. The first market-data frame after a reconnect writes `GAP_END`
+//! (the `market_info` greeting does not).
 
 use std::sync::Arc;
 
@@ -14,7 +15,9 @@ use crate::subscriber::Subscriber;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Summary {
+    /// Connection attempts made with a resolved feed URL (a failed authorize is not one).
     pub connections: u32,
+    /// Frames written, `market_info` greetings included.
     pub frames: u64,
     pub gaps: u64,
 }
@@ -37,21 +40,28 @@ pub async fn capture(
         .expect("TLS backend available");
     let mut token = None;
     while !*stop.borrow() {
-        if let Some(fp) = endpoint.token_fingerprint()
-            && token.replace(fp) != Some(fp)
-        {
-            rec.token_reload("token file changed")?;
+        if let Some(fp) = endpoint.token_fingerprint() {
+            match token.replace(fp) {
+                None => rec.token_reload("token loaded")?,
+                Some(old) if old != fp => rec.token_reload("token file changed")?,
+                Some(_) => {}
+            }
         }
         let out = match endpoint.url(&http).await {
-            Ok(url) => run_connection(&url, sub, rec, opts, stop).await?,
+            Ok(url) => {
+                summary.connections += 1;
+                run_connection(&url, sub, rec, opts, stop).await?
+            }
             Err(e) => Outcome {
                 end: End::Failed(e),
                 frames: 0,
+                data_frames: 0,
             },
         };
-        summary.connections += 1;
         summary.frames += out.frames;
-        if out.frames > 0 {
+        // Only market data proves the feed works: a greeting followed by a drop must not
+        // reset the backoff, or a feed that always cuts after market_info is hammered.
+        if out.data_frames > 0 {
             backoff.reset();
         }
         if out.end == End::Stopped {
@@ -249,9 +259,11 @@ mod tests {
         let recs = read_log(logs.path()).unwrap();
         let kinds: Vec<_> = recs.iter().map(|r| r.kind).collect();
         assert_eq!(kinds[0], RecordKind::TokenReload);
+        assert_eq!(recs[0].payload, b"token loaded");
         assert_eq!(kinds[1], RecordKind::GapStart);
         assert!(String::from_utf8_lossy(&recs[1].payload).contains("HTTP 401"));
         assert_eq!(kinds[2], RecordKind::TokenReload);
+        assert_eq!(recs[2].payload, b"token file changed");
         assert!(kinds.contains(&RecordKind::GapEnd));
         assert!(
             recs.iter()
