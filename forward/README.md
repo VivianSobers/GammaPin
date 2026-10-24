@@ -22,7 +22,7 @@ Run from `research/`. The eve is the last trading day before expiry.
    python bhavcopy.py --start <eve> --end <eve>
    python participant_oi.py --start <eve> --end <eve>
    ```
-   If RBI has held a 91-day T-bill auction since the last one in `cache/tbill_91d.csv`, refresh it with `tbill_rbi.py`.
+   If RBI has held a 91-day T-bill auction since the last one in `cache/tbill_91d.csv`, refresh it with `tbill_rbi.py --lo <first prid> --hi <last prid>`: take `--lo` one above the highest prid in `cache/tbill_rbi_pages.csv` and `--hi` about 60 higher per week since its last auction row (RBI issues roughly 50–60 press releases a week; prids already listed are skipped, so an overshoot only costs requests).
 2. **Before 09:15 IST on expiry day** (later works until 15:30, with a warning): run `python forward_test.py predict-eod --expiry YYYY-MM-DD`.
 3. **Check that `eve` in `forward/{expiry}.json` is the real eve.** `predict-eod` uses the last cached bhavcopy before expiry, so a missed download in step 1 silently gives an older day. If it is wrong, download the file and rerun with `--force` (only before publishing).
 4. Run the `git add`, `git commit` and `git push` commands it prints, **before 15:30 IST**. The pushed commit on GitHub is the public timestamp.

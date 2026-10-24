@@ -93,15 +93,15 @@ These come from the committed test-set outputs and are for context only. None of
 
 The H1 predictions for **expiry 1 (Mon 19 Oct 2026)** and **expiry 2 (Tue 27 Oct 2026)** are published from the eve's bhavcopy before the session, with a SHA-256 in a public git commit, then scored against the settlement ([forward/README.md](../forward/README.md)). Expiry 1 was added after the freeze (PREREGISTRATION.md, "Deviations"). Two forward expiries cannot confirm or reject H1. They show the pipeline running live and in public, without hindsight.
 
-| Expiry | Eve | Published (UTC) | SHA-256 | Pin S0 | Pin S1 | Pin S2 | Max pain | No move | Settlement | Errors |
-|---|---|---|---|---|---|---|---|---|---|---|
-| 19 Oct 2026 | 16 Oct | 18 Oct 17:16 | `c5827627…` | 23,200 | 23,000 | 23,000 | 23,050 | 23,103.5 | 22,888.95 | S0 311, S1 111, S2 111, MP 161, NM 215 |
-| 27 Oct 2026 | 26 Oct | pending | | | | | | | | |
+| Expiry | Eve | Published (UTC) | SHA-256 | Pin S0 | Pin S1 | Pin S2 | Max pain | Nearest 100 | No move | Settlement | Errors |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 19 Oct 2026 | 16 Oct | 18 Oct 17:16 | `c5827627…` | 23,200 | 23,000 | 23,000 | 23,050 | 23,100 | 23,103.5 | 22,888.95 | S0 311, S1 111, S2 111, MP 161, N100 211, NM 215 |
+| 27 Oct 2026 | 26 Oct | pending | | | | | | | | | |
 
 ## Limitations
 
 - **Eve close, not expiry-day 14:00.** The first design predicted from 14:00 on expiry day, closer to the event. Intraday data was not freely available, so the decision moved to the eve close, one full session before settlement ([PREREGISTRATION.md](../PREREGISTRATION.md), "Design change before the freeze"). Pinning that only shows up in the last hours of expiry day would not be seen here.
-- **Close prices, not a snapshot.** `ClsPric` is NSE's closing price for each option, and untraded strikes are dropped. The chain is a close-period approximation.
+- **Close prices, not a snapshot.** `ClsPric` is NSE's closing price for each option, and untraded strikes give no price: they get no IV of their own, but their OI still counts, at an IV interpolated from the neighbouring strikes. The chain is a close-period approximation.
 - **Participant OI is not per strike.** S1 and S2 apply one sign pair across all strikes, from positions in all NSE index options, not Nifty alone.
 - **Sample size.** 28 test expiries give wide CIs: on S1 the test CI spans about 76 points. A small real effect could be missed. Every pre-registered comparison against the best baseline, though, points against H1.
 - **No live capture.** The study uses no tick data and does not validate GEX from the end-of-day chain against intraday chains (G6.2 dropped).
@@ -118,6 +118,6 @@ python h1_eod.py --split train
 python h1_eod.py --split test
 ```
 
-The T-bill series is rebuilt with `tbill_rbi.py` from RBI press releases (see `rates.py`). Raw NSE files are not committed; the commands above download them.
+The T-bill series is rebuilt from RBI press releases with `python tbill_rbi.py --lo 58700 --hi 63900`, the prid range scanned for this study (to extend it, start one above the highest prid in `cache/tbill_rbi_pages.csv` and go about 60 higher per week of releases; see `rates.py`). Raw NSE files are not committed; the commands above download them.
 
 **Analytics, not trading advice.**

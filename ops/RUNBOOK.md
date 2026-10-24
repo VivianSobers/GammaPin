@@ -13,7 +13,7 @@ The routine in use is the H1 forward test on Nifty expiry days, from free NSE fi
 | Time | Step | Check |
 |---|---|---|
 | Evening, after NSE publishes | From `research/`: `python bhavcopy.py --start <eve> --end <eve>` and `python participant_oi.py --start <eve> --end <eve>` | Both files present in `research/cache/` |
-| Same evening | Refresh `research/cache/tbill_91d.csv` with `tbill_rbi.py` if RBI held a 91-day auction since its last row | Latest row is the latest auction before the eve |
+| Same evening | Refresh `research/cache/tbill_91d.csv` with `tbill_rbi.py --lo <first prid> --hi <last prid>`: take `--lo` one above the highest prid in `cache/tbill_rbi_pages.csv` and `--hi` about 60 higher per week since its last auction row (RBI issues roughly 50–60 press releases a week; prids already listed are skipped, so an overshoot only costs requests) if RBI held a 91-day auction since its last row | Latest row is the latest auction before the eve |
 
 ## Expiry day (Nifty, Tuesday; previous trading day on a holiday, see [docs/CALENDAR.md](../docs/CALENDAR.md))
 

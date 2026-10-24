@@ -1,6 +1,6 @@
 # GammaPin
 
-**The first open, pre-registered test of whether gamma exposure predicts Nifty expiry-day moves — on free public data.**
+**As far as we found, the first open, pre-registered test of whether gamma exposure predicts Nifty expiry-day moves — on free public data.**
 
 [![CI](https://img.shields.io/badge/CI-rust_+_python-2ea44f?logo=githubactions&logoColor=white)](.github/workflows/ci.yml)
 [![Rust](https://img.shields.io/badge/Rust-2024_edition-000000?logo=rust&logoColor=white)](Cargo.toml)
@@ -9,7 +9,7 @@
 [![H1](https://img.shields.io/badge/H1-not_supported-lightgrey)](docs/RESULTS.md)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-About 59% of Indian index-options turnover is in same-day-expiry contracts, and
+Much of Indian index-options trading is in contracts close to expiry, and
 traders rely on GEX charts whose claims nobody has tested. GammaPin fixes its
 hypotheses before looking at the data, compares the US sign convention with
 India's participant-wise positioning, and forward-tests on expiry day with a
@@ -238,10 +238,10 @@ Status marks: ✅ done · ⏳ in progress · ➖ dropped.
 
 ### Forward test
 
-| Expiry | Published | Pin S0 | Pin S1 | Pin S2 | Max pain | No move | Settlement |
-|---|---|---:|---:|---:|---:|---:|---|
-| 19 Oct 2026 | 18 Oct, `c5827627…` | 23,200 | 23,000 | 23,000 | 23,050 | 23,103.5 | 22,888.95 |
-| 27 Oct 2026 | pending | | | | | | |
+| Expiry | Published | Pin S0 | Pin S1 | Pin S2 | Max pain | Nearest 100 | No move | Settlement |
+|---|---|---:|---:|---:|---:|---:|---:|---|
+| 19 Oct 2026 | 18 Oct, `c5827627…` | 23,200 | 23,000 | 23,000 | 23,050 | 23,100 | 23,103.5 | 22,888.95 |
+| 27 Oct 2026 | pending | | | | | | | |
 
 Two forward expiries cannot confirm or reject H1. They show the pipeline running
 live and in public, without hindsight.
