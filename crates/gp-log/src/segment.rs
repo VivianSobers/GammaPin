@@ -42,6 +42,13 @@ pub fn scan(buf: &[u8]) -> Scan {
 /// zstd level for closed segments: fast to write, about 4x smaller on feed frames.
 pub const ZSTD_LEVEL: i32 = 3;
 
+/// Whether a scan stopping at `reason` looks like a torn write (a crash mid-record) rather
+/// than a record this version cannot read. Recovery truncates torn tails; readers treat
+/// them as the end of the data.
+pub(crate) fn is_torn(reason: Invalid) -> bool {
+    !matches!(reason, Invalid::UnknownKind(_))
+}
+
 fn is_compressed(path: &Path) -> bool {
     path.to_str().is_some_and(|p| p.ends_with(".gpl.zst"))
 }
@@ -78,10 +85,21 @@ pub struct Recovery {
 }
 
 /// Truncate a segment at the end of its last valid record.
+///
+/// Only for uncompressed segments: a `.gpl.zst` file is refused, since truncating its
+/// compressed bytes would destroy it.
 pub fn recover_segment(path: &Path) -> Result<Recovery, LogError> {
+    if is_compressed(path) {
+        return Err(LogError::Io(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!("{}: cannot recover a compressed segment", path.display()),
+        )));
+    }
     let buf = fs::read(path)?;
     let s = scan(&buf);
-    if let Some(reason @ Invalid::UnknownKind(_)) = s.tail {
+    if let Some(reason) = s.tail
+        && !is_torn(reason)
+    {
         return Err(LogError::Corrupt {
             path: path.to_path_buf(),
             offset: s.valid_len as u64,
@@ -373,6 +391,17 @@ mod tests {
             other => panic!("expected Corrupt(UnknownKind), got {other:?}"),
         }
         assert_eq!(std::fs::read(&path).unwrap(), buf);
+    }
+
+    #[test]
+    fn recovery_refuses_compressed_segment() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(segment_file_name(0));
+        std::fs::write(&path, encode(&[rec(1, 4)])).unwrap();
+        let zst = compress_segment(&path).unwrap();
+        let before = std::fs::read(&zst).unwrap();
+        assert!(matches!(recover_segment(&zst), Err(LogError::Io(_))));
+        assert_eq!(std::fs::read(&zst).unwrap(), before);
     }
 
     #[test]

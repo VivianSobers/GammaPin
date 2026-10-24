@@ -226,7 +226,7 @@ mod tests {
         assert_eq!(live.stats().torn_bytes, 7);
         assert_eq!(live.take_gaps(), [1]);
 
-        // a bad CRC mid-segment: the segment is abandoned and the next one followed
+        // a bad CRC at the end of a closed segment is a torn write too: skipped, next followed
         let seg1 = dir.join(gp_log::segment_file_name(1));
         let mut bad = bytes.clone();
         bad.truncate(bytes.len() - 7);
@@ -235,6 +235,8 @@ mod tests {
         std::fs::write(&seg1, &bad).unwrap();
         std::fs::write(dir.join(gp_log::segment_file_name(2)), b"").unwrap();
         assert_eq!(live.poll_event().unwrap(), Poll::Pending);
-        assert_eq!(live.stats().skipped_segments, 1);
+        assert_eq!(live.stats().torn_bytes, 7 + bad.len() as u64);
+        assert_eq!(live.stats().skipped_segments, 0);
+        assert_eq!(live.nodes[0].tail.segment_index(), Some(2));
     }
 }

@@ -4,6 +4,7 @@ use std::fs;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 
+use crate::segment::is_torn;
 use crate::{Invalid, LogError, Record, list_segments, read_segment, scan, segment_bytes};
 
 /// Every record in `dir`, in segment order. Each segment must be clean.
@@ -20,11 +21,15 @@ pub fn read_log(dir: &Path) -> Result<Vec<Record>, LogError> {
 /// Each [`Tail::poll`] returns the records completed since the last call. A record the
 /// writer has only partly flushed is held back until the rest arrives. The tail moves to the
 /// next segment once that segment exists and the current one has no bytes left.
+///
+/// When an error stops a poll after some records were already read, those records are
+/// returned and the error is raised by the next poll.
 pub struct Tail {
     dir: PathBuf,
     index: Option<u32>,
     offset: u64,
     pending: Vec<u8>,
+    deferred: Option<LogError>,
 }
 
 impl Tail {
@@ -35,6 +40,7 @@ impl Tail {
             index: None,
             offset: 0,
             pending: Vec::new(),
+            deferred: None,
         }
     }
 
@@ -71,7 +77,13 @@ impl Tail {
         let s = scan(&self.pending);
         out.extend(s.records);
         match s.tail {
-            None | Some(Invalid::Truncated) => {
+            // A partial record, or the bytes of a torn write: hold them back. They become
+            // a torn tail once the writer moves to the next segment.
+            None => {
+                self.pending.drain(..s.valid_len);
+                Ok(())
+            }
+            Some(reason) if is_torn(reason) => {
                 self.pending.drain(..s.valid_len);
                 Ok(())
             }
@@ -96,8 +108,28 @@ impl Tail {
     }
 
     fn poll_inner(&mut self, skip_torn: bool) -> Result<(Vec<Record>, u64), LogError> {
+        if let Some(e) = self.deferred.take() {
+            return Err(e);
+        }
         let mut out = Vec::new();
         let mut skipped = 0;
+        match self.advance(skip_torn, &mut out, &mut skipped) {
+            Err(e) if !out.is_empty() => {
+                self.deferred = Some(e);
+                Ok((out, skipped))
+            }
+            r => r.map(|()| (out, skipped)),
+        }
+    }
+
+    fn advance(
+        &mut self,
+        skip_torn: bool,
+        out: &mut Vec<Record>,
+        skipped: &mut u64,
+    ) -> Result<(), LogError> {
+        // A listed `.gpl` can be replaced by its `.gpl.zst` before we open it.
+        let mut relists = 0;
         loop {
             let segments = list_segments(&self.dir).or_else(|e| match e {
                 LogError::Io(io) if io.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
@@ -107,12 +139,20 @@ impl Tail {
                 None => (!segments.is_empty()).then_some(0),
                 Some(i) => segments.iter().position(|s| s.index == i),
             }) else {
-                return Ok((out, skipped));
+                return Ok(());
             };
             let seg = &segments[pos];
             self.index = Some(seg.index);
-            self.read_new_bytes(&seg.path, seg.compressed)?;
-            self.take_records(&seg.path, &mut out)?;
+            match self.read_new_bytes(&seg.path, seg.compressed) {
+                Err(LogError::Io(io))
+                    if io.kind() == std::io::ErrorKind::NotFound && relists < 3 =>
+                {
+                    relists += 1;
+                    continue;
+                }
+                r => r?,
+            }
+            self.take_records(&seg.path, out)?;
             match segments.get(pos + 1) {
                 // The writer only starts a new segment after the old one is complete,
                 // so anything left over here is a torn tail that will never be finished.
@@ -122,16 +162,16 @@ impl Tail {
                             return Err(LogError::Corrupt {
                                 path: seg.path.clone(),
                                 offset: self.offset - self.pending.len() as u64,
-                                reason: Invalid::Truncated,
+                                reason: scan(&self.pending).tail.unwrap_or(Invalid::Truncated),
                             });
                         }
-                        skipped += self.pending.len() as u64;
+                        *skipped += self.pending.len() as u64;
                         self.pending.clear();
                     }
                     self.index = Some(next.index);
                     self.offset = 0;
                 }
-                None => return Ok((out, skipped)),
+                None => return Ok(()),
             }
         }
     }
@@ -266,6 +306,45 @@ mod tests {
     }
 
     #[test]
+    fn records_before_an_error_come_first() {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut w, _) = Writer::open(dir.path(), cfg(1 << 20)).unwrap();
+        put(&mut w, 1, 10);
+        w.close().unwrap();
+        let seg0 = dir.path().join(segment_file_name(0));
+        let mut bytes = fs::read(&seg0).unwrap();
+        bytes.extend_from_slice(&[0x31, 0x4C, 0x50]);
+        fs::write(&seg0, &bytes).unwrap();
+        fs::write(dir.path().join(segment_file_name(1)), b"").unwrap();
+
+        let mut t = Tail::new(dir.path());
+        assert_eq!(t.poll().unwrap().len(), 1);
+        assert!(matches!(t.poll(), Err(LogError::Corrupt { .. })));
+    }
+
+    #[test]
+    fn torn_bad_crc_is_a_torn_tail() {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut w, _) = Writer::open(dir.path(), cfg(1 << 20)).unwrap();
+        put(&mut w, 1, 10);
+        put(&mut w, 2, 10);
+        w.close().unwrap();
+        let seg0 = dir.path().join(segment_file_name(0));
+        let mut bytes = fs::read(&seg0).unwrap();
+        let last = bytes.len() - 1;
+        bytes[last] ^= 0xFF; // second record's CRC no longer matches
+        fs::write(&seg0, &bytes).unwrap();
+        // still the live segment: held back, not an error
+        let mut t = Tail::new(dir.path());
+        assert_eq!(t.poll().unwrap().len(), 1);
+        // once the writer has moved on, it is skipped like any torn tail
+        fs::write(dir.path().join(segment_file_name(1)), b"").unwrap();
+        let (recs, skipped) = t.poll_skipping_torn().unwrap();
+        assert!(recs.is_empty());
+        assert_eq!(skipped, (crate::HEADER_LEN + 10) as u64);
+    }
+
+    #[test]
     fn lenient_poll_keeps_records_before_a_tear() {
         let dir = tempfile::tempdir().unwrap();
         let (mut w, _) = Writer::open(dir.path(), cfg(1 << 20)).unwrap();
@@ -278,7 +357,9 @@ mod tests {
         fs::write(&seg0, &bytes).unwrap();
         fs::write(dir.path().join(segment_file_name(1)), b"").unwrap();
 
-        assert!(Tail::new(dir.path()).poll().is_err());
+        let mut strict = Tail::new(dir.path());
+        assert_eq!(strict.poll().unwrap().len(), 2);
+        assert!(strict.poll().is_err());
         let mut t = Tail::new(dir.path());
         let (recs, skipped) = t.poll_skipping_torn().unwrap();
         assert_eq!(recs.len(), 2);

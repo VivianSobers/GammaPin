@@ -31,7 +31,8 @@ pub struct Writer {
     dir: PathBuf,
     cfg: WriterConfig,
     index: u32,
-    file: BufWriter<File>,
+    /// None once poisoned: the buffer is discarded so nothing after the error reaches disk.
+    file: Option<BufWriter<File>>,
     seg_len: u64,
     last_flush: Instant,
     poisoned: bool,
@@ -70,7 +71,7 @@ impl Writer {
             dir,
             cfg,
             index,
-            file,
+            file: Some(file),
             seg_len: 0,
             last_flush: Instant::now(),
             poisoned: false,
@@ -97,9 +98,9 @@ impl Writer {
             if self.seg_len + need as u64 > self.cfg.segment_bytes {
                 self.rotate()?;
             }
-            self.file
-                .write_all(&encode_header(kind, conn_id, recv_ns, mono_ns, payload))?;
-            self.file.write_all(payload)?;
+            let file = self.file()?;
+            file.write_all(&encode_header(kind, conn_id, recv_ns, mono_ns, payload))?;
+            file.write_all(payload)?;
             self.seg_len += need as u64;
             if self.last_flush.elapsed() >= self.cfg.flush_interval {
                 self.flush()?;
@@ -107,9 +108,21 @@ impl Writer {
             Ok(())
         })();
         if result.is_err() {
-            self.poisoned = true;
+            self.poison();
         }
         result
+    }
+
+    fn file(&mut self) -> Result<&mut BufWriter<File>, LogError> {
+        self.file.as_mut().ok_or(LogError::Poisoned)
+    }
+
+    /// Mark the writer unusable and drop its buffer without writing it out.
+    fn poison(&mut self) {
+        self.poisoned = true;
+        if let Some(f) = self.file.take() {
+            let (_file, _unwritten) = f.into_parts();
+        }
     }
 
     /// Push buffered records to the kernel and to disk.
@@ -122,13 +135,14 @@ impl Writer {
             return Err(LogError::Poisoned);
         }
         let result = (|| {
-            self.file.flush()?;
-            self.file.get_ref().sync_data()?;
+            let file = self.file()?;
+            file.flush()?;
+            file.get_ref().sync_data()?;
             self.last_flush = Instant::now();
             Ok(())
         })();
         if result.is_err() {
-            self.poisoned = true;
+            self.poison();
         }
         result
     }
@@ -138,7 +152,7 @@ impl Writer {
         let next = self.index + 1;
         let file = create_segment(&self.dir, next)?;
         self.index = next;
-        self.file = file;
+        self.file = Some(file);
         self.seg_len = 0;
         Ok(())
     }
@@ -154,9 +168,9 @@ impl Writer {
 
 impl Drop for Writer {
     fn drop(&mut self) {
-        if !self.poisoned {
-            let _ = self.file.flush();
-            let _ = self.file.get_ref().sync_data();
+        if let Some(f) = &mut self.file {
+            let _ = f.flush();
+            let _ = f.get_ref().sync_data();
         }
     }
 }
