@@ -20,7 +20,7 @@ repository = "https://github.com/guru-bharadwaj20/GammaPin"
 [workspace.dependencies]
 gp-log = { path = "crates/gp-log" }
 gp-feed = { path = "crates/gp-feed" }
-gp-replay = { path = "crates/gp-replay" }
+gp-replay = { path = "crates/gp-replay", default-features = false }
 gp-quant = { path = "crates/gp-quant" }
 gp-capture = { path = "crates/gp-capture" }
 gp-merge = { path = "crates/gp-merge" }

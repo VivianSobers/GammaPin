@@ -6,7 +6,7 @@ use sha2::{Digest, Sha256};
 use crate::{EventStream, Poll, StreamError};
 
 /// Canonical bytes of one event: key and metadata, then every field little-endian, bit-exact.
-pub fn canonical(e: &Event, out: &mut Vec<u8>) {
+pub(crate) fn canonical(e: &Event, out: &mut Vec<u8>) {
     for s in [&e.instrument_key, &e.underlying] {
         out.extend_from_slice(&(s.len() as u32).to_le_bytes());
         out.extend_from_slice(s.as_bytes());
@@ -35,7 +35,7 @@ pub fn canonical(e: &Event, out: &mut Vec<u8>) {
     out.push(e.src_mask);
 }
 
-pub fn hex(bytes: &[u8]) -> String {
+pub(crate) fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 

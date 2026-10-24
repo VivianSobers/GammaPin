@@ -13,7 +13,7 @@ pub use format::{FormatError, Meta, write_replay};
 pub use order::{is_replay_order, sort_for_replay};
 pub use pace::{Clock, ManualClock, Paced, SystemClock};
 pub use reader::{ReplayFile, Tick};
-pub use stream::{EventStream, Poll, ReplayStream, Source, StreamError, VecStream, collect};
+pub use stream::{EventStream, Poll, ReplayStream, Source, StreamError, VecStream};
 
 /// Replay speed.
 #[derive(Debug, Clone, Copy, PartialEq)]

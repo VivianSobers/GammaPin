@@ -5,8 +5,13 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[features]
+default = ["cli"]
+# the gp-replay binary; library users can turn it off to skip clap
+cli = ["dep:clap"]
+
 [dependencies]
-clap.workspace = true
+clap = { workspace = true, optional = true }
 crc32c.workspace = true
 gp-feed.workspace = true
 memmap2.workspace = true
@@ -15,6 +20,14 @@ thiserror.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
+
+[[bin]]
+name = "gp-replay"
+required-features = ["cli"]
+
+[[test]]
+name = "determinism"
+required-features = ["cli"]
 
 [[bench]]
 name = "replay"

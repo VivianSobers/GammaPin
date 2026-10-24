@@ -99,7 +99,8 @@ impl<S: EventStream> Paced<S> {
     }
 
     /// Milliseconds until the held event is due (0 when nothing is held or it is due).
-    pub fn wait_ms(&self) -> f64 {
+    #[cfg(test)]
+    pub(crate) fn wait_ms(&self) -> f64 {
         match (&self.held, self.rate, self.anchor) {
             (Some(e), Some(rate), Some((wall, ltt))) => {
                 (wall + (e.ltt_ms - ltt) as f64 / rate - self.clock.now_ms()).max(0.0)

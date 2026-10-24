@@ -67,7 +67,8 @@ impl ReplayStream {
     }
 
     /// Events not yet returned.
-    pub fn remaining(&self) -> u64 {
+    #[cfg(test)]
+    pub(crate) fn remaining(&self) -> u64 {
         self.file.len() - self.next
     }
 }
@@ -129,8 +130,10 @@ impl EventStream for VecStream {
     }
 }
 
-/// Drain a stream to its end (fails on `Pending`, which only live streams return).
-pub fn collect(stream: &mut dyn EventStream) -> Result<Vec<Event>, StreamError> {
+/// Drain a stream to its end. Fails on `Pending`, which live streams return and so does a
+/// [`crate::Paced`] stream while it holds an event back.
+#[cfg(test)]
+pub(crate) fn collect(stream: &mut dyn EventStream) -> Result<Vec<Event>, StreamError> {
     let mut out = Vec::new();
     loop {
         match stream.poll_event()? {

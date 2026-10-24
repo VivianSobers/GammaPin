@@ -67,19 +67,28 @@ fn same_input_same_bytes_and_hash() {
 
     // Pacing changes when events come out, never which or in what order.
     let clock = ManualClock::default();
+    // 100x over a ~2 minute session: about 1.2 s of paced wall time in 1 ms steps.
     let mut paced = Paced::new(
         ReplayStream::new(file),
-        Speed::Multiple(1e6),
+        Speed::Multiple(100.0),
         Box::new(clock.clone()),
     );
     let mut events = Vec::new();
+    let mut pending = 0;
     loop {
         match paced.poll_event().unwrap() {
             Poll::Ready(e) => events.push(e),
-            Poll::Pending => clock.advance(1.0),
+            Poll::Pending => {
+                pending += 1;
+                clock.advance(1.0);
+            }
             Poll::End => break,
         }
     }
+    assert!(
+        pending > 1_000,
+        "only {pending} Pending polls: pacing barely engaged"
+    );
     let seen = events.len() as u64;
     assert_eq!(seen, n);
     let (paced_hash, _) = stream_digest(&mut VecStream::new(events, Source::Replay)).unwrap();

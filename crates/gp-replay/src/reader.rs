@@ -190,12 +190,6 @@ impl ReplayFile {
         &self.metas
     }
 
-    /// The raw bytes of event `i` (for hashing).
-    pub fn event_bytes(&self, i: u64) -> &[u8] {
-        let at = self.events_at + i as usize * EVENT_LEN;
-        &self.backing.bytes()[at..at + EVENT_LEN]
-    }
-
     /// Event `i`, numbers only. Panics when `i >= len()`.
     pub fn tick(&self, i: u64) -> Tick {
         assert!(i < self.len, "event {i} of {}", self.len);

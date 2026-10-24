@@ -167,7 +167,8 @@ pub fn encode(events: &[Event]) -> Result<Vec<u8>, FormatError> {
     Ok(out)
 }
 
-/// Write a replay log atomically (temporary file, fsync, rename).
+/// Write a replay log atomically (temporary file, fsync, rename, then fsync the directory
+/// so the rename itself survives a crash).
 pub fn write_replay(path: &Path, events: &[Event]) -> Result<(), FormatError> {
     let bytes = encode(events)?;
     let tmp = path.with_extension("gpr.tmp");
@@ -177,6 +178,14 @@ pub fn write_replay(path: &Path, events: &[Event]) -> Result<(), FormatError> {
         f.sync_all()?;
     }
     std::fs::rename(&tmp, path)?;
+    // Directories cannot be opened for syncing on Windows; the rename is still atomic there.
+    #[cfg(unix)]
+    std::fs::File::open(
+        path.parent()
+            .filter(|p| !p.as_os_str().is_empty())
+            .unwrap_or(Path::new(".")),
+    )?
+    .sync_all()?;
     Ok(())
 }
 

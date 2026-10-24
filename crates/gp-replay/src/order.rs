@@ -4,7 +4,7 @@
 use gp_feed::Event;
 
 /// The node that first carried an event: the lowest set bit of `src_mask` (8 when none).
-pub fn node(src_mask: u8) -> u32 {
+pub(crate) fn node(src_mask: u8) -> u32 {
     src_mask.trailing_zeros()
 }
 
