@@ -140,7 +140,8 @@ impl Rng {
 pub struct MarketConfig {
     pub seed: u64,
     pub date: Date,
-    /// Minutes after IST midnight of the first frame (555 = 09:15).
+    /// Starting clock, minutes after IST midnight (555 = 09:15). The first frame is
+    /// stamped one `step_ms` later.
     pub start_minute: f64,
     pub spot: f64,
     /// At-the-money annual vol.
@@ -238,7 +239,8 @@ impl Market {
         &self.instruments
     }
 
-    /// Exchange time of the last frame, Unix ms.
+    /// Exchange time of the last frame from `next_frame`, Unix ms; the starting clock
+    /// before the first frame.
     pub fn now_ms(&self) -> i64 {
         self.now_ms
     }

@@ -49,7 +49,7 @@ fn blank(instrument_key: &str, current_ts: i64) -> Update {
 
 /// Flatten a response into updates sorted by instrument key.
 ///
-/// Feeds without an `LTPC` block (no trade time) are skipped: they cannot be ordered.
+/// Feeds without an `LTPC` block are skipped: the trade time they are ordered by comes from it.
 pub fn updates(resp: &FeedResponse) -> Vec<Update> {
     let mut keys: Vec<&String> = resp.feeds.keys().collect();
     keys.sort();

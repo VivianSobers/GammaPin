@@ -35,7 +35,10 @@ fn check(name: &str) {
     if std::env::var_os("UPDATE_GOLDEN").is_some() {
         std::fs::write(&expected_path, &got).unwrap();
     }
-    let expected = std::fs::read_to_string(&expected_path).unwrap();
+    // tolerate a CRLF checkout (.gitattributes pins LF, but older clones may differ)
+    let expected = std::fs::read_to_string(&expected_path)
+        .unwrap()
+        .replace('\r', "");
     assert_eq!(got, expected, "{name}.pb no longer decodes to {name}.txt");
 }
 

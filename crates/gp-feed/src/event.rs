@@ -38,7 +38,8 @@ pub struct Event {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Normalizer {
     /// The feed's OI is in index units (lot size × contracts) and is divided by the lot
-    /// size. Unverified for the live feed; see `OI_IN_UNITS` in PREREGISTRATION.md.
+    /// size. Unverified for the live feed; set by `[merge] oi_in_units`, see the
+    /// "OI units" row in docs/SYSTEMS.md.
     pub oi_in_units: bool,
 }
 

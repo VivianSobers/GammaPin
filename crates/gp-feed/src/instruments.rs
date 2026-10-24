@@ -77,7 +77,7 @@ pub enum MasterError {
     Io(#[from] std::io::Error),
     #[error("json: {0}")]
     Json(#[from] serde_json::Error),
-    #[error("{0}: Nifty contract without expiry or lot size")]
+    #[error("{0}: Nifty contract without expiry, lot size or (for an option) strike")]
     Incomplete(String),
 }
 
@@ -109,8 +109,13 @@ fn convert(r: Raw) -> Result<Option<Instrument>, MasterError> {
     let (Some(expiry), Some(lot)) = (r.expiry, r.lot_size) else {
         return Err(MasterError::Incomplete(r.instrument_key));
     };
+    let strike = match (kind.is_option(), r.strike_price) {
+        (false, _) => None,
+        (true, Some(k)) => Some(k),
+        (true, None) => return Err(MasterError::Incomplete(r.instrument_key)),
+    };
     Ok(Some(Instrument {
-        strike: kind.is_option().then_some(r.strike_price.unwrap_or(0.0)),
+        strike,
         key: r.instrument_key,
         underlying: NIFTY.into(),
         kind,
