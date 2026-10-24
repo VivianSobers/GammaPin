@@ -32,7 +32,7 @@ async fn main() -> ExitCode {
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();
     let args = Args::parse();
-    let cfg = match app::load(&args.config) {
+    let cfg = match gp_capture::config::Config::load(&args.config) {
         Ok(c) => c,
         Err(e) => {
             eprintln!("gp-capture: {e:#}");

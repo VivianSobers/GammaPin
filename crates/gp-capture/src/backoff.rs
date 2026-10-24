@@ -38,7 +38,8 @@ impl Backoff {
         self.attempt = 0;
     }
 
-    pub fn attempt(&self) -> u32 {
+    #[cfg(test)]
+    pub(crate) fn attempt(&self) -> u32 {
         self.attempt
     }
 }

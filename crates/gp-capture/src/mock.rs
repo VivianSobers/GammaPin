@@ -18,6 +18,7 @@ use gp_feed::{Instrument, parse_request};
 use prost::Message as _;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::broadcast;
+use tokio::task::JoinSet;
 use tokio_tungstenite::tungstenite::Message;
 
 /// How a cut looks to the client.
@@ -40,17 +41,13 @@ pub struct MockConfig {
 pub struct MockFeed {
     addr: SocketAddr,
     fault: Arc<AtomicU8>,
+    #[cfg(test)]
     generated: Arc<AtomicU64>,
+    #[cfg(test)]
     sent: Arc<AtomicU64>,
-    tasks: Vec<tokio::task::JoinHandle<()>>,
-}
-
-impl Drop for MockFeed {
-    fn drop(&mut self) {
-        for t in &self.tasks {
-            t.abort();
-        }
-    }
+    /// Dropping the set aborts the generator and the accept loop; the accept loop owns the
+    /// per-connection tasks in its own set, so they go with it.
+    _tasks: JoinSet<()>,
 }
 
 impl MockFeed {
@@ -61,12 +58,12 @@ impl MockFeed {
         let generated = Arc::new(AtomicU64::new(0));
         let sent = Arc::new(AtomicU64::new(0));
         let (tx, _) = broadcast::channel::<Arc<FeedResponse>>(4_096);
-        let mut tasks = Vec::new();
+        let mut tasks = JoinSet::new();
 
         if !cfg.interval.is_zero() {
             let (tx, generated) = (tx.clone(), generated.clone());
             let (mcfg, instruments, interval) = (cfg.market, cfg.instruments.clone(), cfg.interval);
-            tasks.push(tokio::spawn(async move {
+            tasks.spawn(async move {
                 let mut market = Market::new(mcfg, instruments);
                 let mut tick = tokio::time::interval(interval);
                 loop {
@@ -74,12 +71,14 @@ impl MockFeed {
                     generated.fetch_add(1, Ordering::Relaxed);
                     let _ = tx.send(Arc::new(market.next_frame()));
                 }
-            }));
+            });
         }
 
         let (fault2, sent2, generated2) = (fault.clone(), sent.clone(), generated.clone());
-        tasks.push(tokio::spawn(async move {
+        tasks.spawn(async move {
+            let mut conns = JoinSet::new();
             while let Ok((tcp, _)) = listener.accept().await {
+                while conns.try_join_next().is_some() {} // reap finished connections
                 if fault2.load(Ordering::Relaxed) == Fault::Drop as u8 {
                     drop(tcp);
                     continue;
@@ -91,15 +90,17 @@ impl MockFeed {
                     sent: sent2.clone(),
                     generated: generated2.clone(),
                 };
-                tokio::spawn(conn.serve(tcp));
+                conns.spawn(conn.serve(tcp));
             }
-        }));
+        });
         Ok(Self {
             addr,
             fault,
+            #[cfg(test)]
             generated,
+            #[cfg(test)]
             sent,
-            tasks,
+            _tasks: tasks,
         })
     }
 
@@ -116,12 +117,14 @@ impl MockFeed {
     }
 
     /// Frames produced by the shared market so far.
-    pub fn generated(&self) -> u64 {
+    #[cfg(test)]
+    pub(crate) fn generated(&self) -> u64 {
         self.generated.load(Ordering::Relaxed)
     }
 
     /// Frames written to sockets, over all connections.
-    pub fn sent(&self) -> u64 {
+    #[cfg(test)]
+    pub(crate) fn sent(&self) -> u64 {
         self.sent.load(Ordering::Relaxed)
     }
 }

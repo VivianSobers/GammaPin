@@ -39,8 +39,6 @@ pub fn conn_id_for(node: &str) -> u8 {
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Stats {
-    pub frames: u64,
-    pub frame_bytes: u64,
     pub gaps: u64,
 }
 
@@ -78,12 +76,9 @@ impl Recorder {
         Ok(recv_ns)
     }
 
-    /// Write one WebSocket frame exactly as received; returns its receive time.
-    pub fn raw_frame(&mut self, payload: &[u8]) -> Result<i64, LogError> {
-        let t = self.put(RecordKind::RawFrame, payload)?;
-        self.stats.frames += 1;
-        self.stats.frame_bytes += payload.len() as u64;
-        Ok(t)
+    /// Write one WebSocket frame exactly as received.
+    pub fn raw_frame(&mut self, payload: &[u8]) -> Result<(), LogError> {
+        self.put(RecordKind::RawFrame, payload).map(drop)
     }
 
     /// The feed is gone (disconnect, error, stall). Only the first call of a gap is written.
@@ -143,7 +138,7 @@ mod tests {
         let (mut r, rec) = Recorder::open(dir.path(), WriterConfig::default(), 2).unwrap();
         assert!(rec.is_none());
         r.subscribe(b"{\"method\":\"sub\"}").unwrap();
-        let t0 = r.raw_frame(b"one").unwrap();
+        r.raw_frame(b"one").unwrap();
         r.gap_end().unwrap(); // not in a gap: nothing written
         r.gap_start("closed by peer").unwrap();
         r.gap_start("connect refused").unwrap(); // same gap
@@ -151,14 +146,7 @@ mod tests {
         r.gap_end().unwrap();
         r.raw_frame(b"two").unwrap();
         r.token_reload("token file changed").unwrap();
-        assert_eq!(
-            r.stats(),
-            Stats {
-                frames: 2,
-                frame_bytes: 6,
-                gaps: 1
-            }
-        );
+        assert_eq!(r.stats(), Stats { gaps: 1 });
         r.close().unwrap();
 
         let recs = read_log(dir.path()).unwrap();
@@ -170,7 +158,7 @@ mod tests {
         );
         assert_eq!(recs[2].payload, b"closed by peer");
         assert!(recs.iter().all(|r| r.conn_id == 2));
-        assert_eq!(recs[1].recv_ns, t0);
+        assert!(recs.windows(2).all(|w| w[0].recv_ns <= w[1].recv_ns));
         assert!(recs.windows(2).all(|w| w[0].mono_ns <= w[1].mono_ns));
     }
 

@@ -33,7 +33,8 @@ impl Subscriber {
     }
 
     /// Whether the option band has been chosen.
-    pub fn banded(&self) -> bool {
+    #[cfg(test)]
+    pub(crate) fn banded(&self) -> bool {
         self.banded
     }
 

@@ -63,7 +63,11 @@ async fn sigkill_mid_write_recovers() {
     .unwrap();
     let logs = dir.path().join("data/A").join(today.to_string());
 
+    // A torn tail needs the kill to land inside a write, so it is likely but not certain:
+    // counted and reported, not asserted. Rotation is certain: every restart opens a new
+    // segment, so the count must grow each round.
     let mut torn_tails = 0;
+    let mut prev_segments = 0;
     for round in 0..3 {
         let mut child = spawn_capture(&config);
         tokio::time::sleep(Duration::from_millis(1_500)).await;
@@ -73,9 +77,10 @@ async fn sigkill_mid_write_recovers() {
         // The newest segment may end in a torn record; everything before it must be whole.
         let segs = list_segments(&logs).unwrap();
         assert!(
-            segs.len() >= 2,
-            "round {round}: expected rotation, got {segs:?}"
+            segs.len() >= 2 && segs.len() > prev_segments,
+            "round {round}: expected new segments after {prev_segments}, got {segs:?}"
         );
+        prev_segments = segs.len();
         let last = segs.last().unwrap();
         let scan = gp_log::scan(&segment_bytes(&last.path).unwrap());
         if scan.tail.is_some() {

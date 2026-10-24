@@ -47,7 +47,11 @@ pub async fn capture(
                 Some(_) => {}
             }
         }
-        let out = match endpoint.url(&http).await {
+        let url = tokio::select! {
+            _ = stopped(stop) => break,
+            r = endpoint.url(&http) => r,
+        };
+        let out = match url {
             Ok(url) => {
                 summary.connections += 1;
                 run_connection(&url, sub, rec, opts, stop).await?

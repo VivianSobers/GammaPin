@@ -3,7 +3,7 @@
 //!
 //!     cargo bench -p gp-capture --bench throughput
 
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use futures_util::{SinkExt, StreamExt};
 use gp_capture::client::{ConnOpts, End, run_connection};
@@ -79,5 +79,4 @@ fn main() {
     for per_frame in [1, 5, 40] {
         rt.block_on(run(per_frame));
     }
-    std::thread::sleep(Duration::from_millis(10));
 }

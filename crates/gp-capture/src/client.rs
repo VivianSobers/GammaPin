@@ -59,7 +59,7 @@ pub async fn stopped(stop: &mut watch::Receiver<bool>) {
 
 /// Whether a frame carries market data. The `market_info` greeting does not: it arrives
 /// before the subscription takes effect, so it cannot close a gap.
-pub fn carries_data(payload: &[u8]) -> bool {
+pub(crate) fn carries_data(payload: &[u8]) -> bool {
     gp_feed::decode_frame(payload).is_ok_and(|f| f.r#type != Type::MarketInfo as i32)
 }
 
@@ -112,7 +112,8 @@ pub async fn run_connection(
     let end = loop {
         tokio::select! {
             _ = stopped(stop) => {
-                let _ = sink.close().await;
+                // a dead peer must not hold up shutdown
+                let _ = tokio::time::timeout(opts.stall, sink.close()).await;
                 break End::Stopped;
             }
             _ = flush.tick() => rec.flush()?,

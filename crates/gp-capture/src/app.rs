@@ -1,7 +1,6 @@
 //! The gp-capture process: config → instruments → one recorder → the capture loop, inside
 //! the capture window.
 
-use std::path::Path;
 use std::time::Duration;
 
 use anyhow::Context;
@@ -22,6 +21,9 @@ pub fn now_ms() -> i64 {
     realtime_ns() / 1_000_000
 }
 
+/// Whole-request limit for the instrument master download (about 1 MB gzipped).
+const MASTER_TIMEOUT: Duration = Duration::from_secs(60);
+
 /// Fetch the instrument master into `path` unless it is already there from today.
 pub async fn ensure_master(cfg: &Config, today: Date) -> anyhow::Result<()> {
     let path = &cfg.capture.master_path;
@@ -33,7 +35,13 @@ pub async fn ensure_master(cfg: &Config, today: Date) -> anyhow::Result<()> {
     if fresh || cfg.capture.feed_url.is_some() {
         return Ok(());
     }
-    let bytes = reqwest::get(&cfg.upstox.instrument_master_url)
+    let http = reqwest::Client::builder()
+        .timeout(MASTER_TIMEOUT)
+        .build()
+        .context("building the HTTP client")?;
+    let bytes = http
+        .get(&cfg.upstox.instrument_master_url)
+        .send()
         .await?
         .error_for_status()?
         .bytes()
@@ -41,7 +49,17 @@ pub async fn ensure_master(cfg: &Config, today: Date) -> anyhow::Result<()> {
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;
     }
-    std::fs::write(path, &bytes).with_context(|| format!("writing {}", path.display()))?;
+    // Temporary file, fsync, rename: a crash never leaves a half-written master behind.
+    let mut tmp_name = path.file_name().unwrap_or_default().to_os_string();
+    tmp_name.push(".tmp");
+    let tmp = path.with_file_name(tmp_name);
+    {
+        let mut f =
+            std::fs::File::create(&tmp).with_context(|| format!("writing {}", tmp.display()))?;
+        std::io::Write::write_all(&mut f, &bytes)?;
+        f.sync_all()?;
+    }
+    std::fs::rename(&tmp, path).with_context(|| format!("writing {}", path.display()))?;
     Ok(())
 }
 
@@ -154,14 +172,10 @@ pub async fn run(
     Ok(summary)
 }
 
-/// Load the config named on the command line.
-pub fn load(path: &Path) -> anyhow::Result<Config> {
-    Ok(Config::load(path)?)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::Path;
 
     fn cfg(dir: &Path) -> Config {
         toml::from_str(&format!(
