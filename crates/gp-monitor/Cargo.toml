@@ -3,6 +3,7 @@ name = "gp-monitor"
 description = "Live engine and one-page dashboard served over WebSocket"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 
 [dependencies]

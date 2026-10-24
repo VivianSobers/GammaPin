@@ -3,6 +3,7 @@ name = "gp-log"
 description = "GPL1 append-only, CRC-checked segment log"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 
 [dependencies]

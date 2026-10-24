@@ -3,6 +3,7 @@ name = "gp-capture"
 description = "Upstox V3 WebSocket capture: raw frames to GPL1 segments"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 
 [dependencies]

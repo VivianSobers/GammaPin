@@ -3,6 +3,7 @@ name = "gp-quant"
 description = "Black-76, implied vol, gamma and GEX; one library for live and research"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 
 [lib]

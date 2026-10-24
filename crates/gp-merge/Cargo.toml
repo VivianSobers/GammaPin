@@ -3,6 +3,7 @@ name = "gp-merge"
 description = "Normalize and de-duplicate both nodes' logs into Parquet and a replay log"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 
 [dependencies]

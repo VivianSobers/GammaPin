@@ -4,19 +4,29 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "30 1 * * 1"   # Mondays 01:30 UTC: the slow #[ignore] tests
 
 jobs:
   rust:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
+      # rust-toolchain.toml pins the channel and components; rustup installs them on first use
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --all --check
-      - run: cargo clippy --workspace --all-targets -- -D warnings
-      - run: cargo test --workspace
+      - run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - run: cargo clippy -p gp-quant --all-targets --features python --locked -- -D warnings
+      - run: cargo test --workspace --locked
+
+  rust-ignored:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --workspace --locked -- --ignored
 
   python:
     runs-on: ubuntu-24.04
@@ -29,4 +39,5 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -r requirements.txt ../crates/gp-quant
+      - run: python -c "import gp_quant"
       - run: pytest -q

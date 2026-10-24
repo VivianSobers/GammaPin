@@ -3,6 +3,7 @@ name = "gp-feed"
 description = "Upstox V3 feed types, decoding, instruments and a synthetic market for tests"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 
 [dependencies]
