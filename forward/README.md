@@ -2,7 +2,7 @@
 
 This directory holds the H1 forward test, published before settlement so that nobody can adjust it after the fact.
 
-The primary design is end-of-day (`predict-eod`): the prediction is made from the expiry eve's NSE bhavcopy, the same design H1 was tested on, and needs no broker account. The 14:00 snapshot design (`predict`) needs the live monitor, which is not built since live capture was dropped (17 Oct 2026, [CONTRIBUTING.md](../CONTRIBUTING.md#scope-change-17-oct-2026-no-live-capture)).
+The primary design is end-of-day (`predict-eod`): the prediction is made from the expiry eve's NSE bhavcopy, the same design H1 was tested on, and needs no broker account. The 14:00 snapshot design (`predict`) needs a live feed for the monitor, which needs a KYC'd broker account; live capture was dropped (17 Oct 2026, [CONTRIBUTING.md](../CONTRIBUTING.md#scope-change-17-oct-2026-no-live-capture)).
 
 | File | Written by | Contents |
 |---|---|---|

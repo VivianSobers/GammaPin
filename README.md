@@ -220,9 +220,9 @@ finished every system on the mock feed after the scope change.
 | G5 | Dashboard on `gp-monitor`'s live `/ws`, fed by the mock market | ✅ |
 | G6 | Validation and model freeze (`freeze-v1`) | ✅ |
 | G7 | Test set, forward predictions, scoring, final write-up | ✅ test set · ✅ expiry-1 scored · ⏳ expiry-2 and final write-up |
-| V0–V3 | Capture foundation, merge, replay | ✅ on the mock feed |
+| V0–V3 | Capture foundation, merge, replay | ✅ on the mock feed · ➖ node, install and live-feed steps |
 | V5–V6 | Live engine, monitor server, hardening | ✅ on the mock feed |
-| V4, V7 | Live expiry capture | ✂️ dropped — needs a KYC'd feed |
+| V4, V7 | Expiry capture, chaos test, systems write-up | ➖ live capture (needs a KYC'd feed) · ✅ chaos test, simulated · ✅ write-up |
 
 ### Performance targets
 
