@@ -57,14 +57,14 @@ Start on a Wednesday so day 7 and day 14 are Nifty expiry Tuesdays. See [docs/CA
 | 8 Wed | | G5 dashboard (mock data) | V5 live engine and monitor server |
 | 9 Thu | Sensex expiry | G5 dashboard (mock data) | V5 live engine and monitor server |
 | 10–11 | | G6 tick validation and model finalization | V6 hardening |
-| 12 Sun | | G7 freeze, test set run once | V6 hardening, code freeze |
+| 12 Sun | | G7 freeze, test set run once (done early: Sat 17 Oct, day 4) | V6 hardening, code freeze |
 | 13 Mon | | G5.3 connect dashboard to `/ws` | V6 full dry run |
 | 14 Tue | ⚡ Nifty expiry 2 | G7 live forward test | V7 capture |
 | After | | G7 results write-up | V7 demo replay, systems write-up |
 
 From 17 Oct 2026 the live steps above are dropped (see the scope change at the top). Track V's systems were finished on the mock feed.
 
-**Joint, but not blocking:** the code freeze tag `freeze-v1` (day 12), inviting finance club users (day 10–11), and the open-source release.
+**Joint, but not blocking:** the code freeze tag `freeze-v1` (planned day 12; tagged Sat 17 Oct), inviting finance club users (day 10–11), and the open-source release.
 
 ---
 
@@ -271,7 +271,7 @@ From 17 Oct 2026 the live steps above are dropped (see the scope change at the t
 |---|---|---|
 | V6.1 | Feed-to-dashboard latency histograms, p99 < 250 ms (156 ms, mock feed) | ✅ |
 | V6.2 | Finalize `ops/RUNBOOK.md` | ✅ |
-| V6.3 | Code freeze, tag `freeze-v1` (day 12): tagged at `869a70e` | ✅ |
+| V6.3 | Code freeze, tag `freeze-v1` (planned day 12): tagged at `869a70e` on 17 Oct | ✅ |
 | V6.4 | Full dry run: mock feed → two captures → live monitor → merge → replay | ✅ |
 
 **🚩 CP-V6:** `freeze-v1` tagged, dry run clean. ✅
@@ -320,7 +320,7 @@ From 17 Oct 2026 the live steps above are dropped (see the scope change at the t
 | Tracker | Flip ❌ to ✅ in the commit that completes the task |
 | Data | Never commit raw ticks, Parquet or tokens (`.gitignore` covers them) |
 | Pre-registration | After `prereg-v1`, changes go in its "Deviations" section with a date and reason |
-| Test set | Opened once, on day 12. No re-runs |
+| Test set | Opened once (17 Oct 2026, planned for day 12). No re-runs |
 
 ## Local setup
 

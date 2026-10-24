@@ -9,7 +9,7 @@ Fixed on 17 Oct 2026, from the training set only, before the test split is opene
 | Data | NSE bhavcopy at the expiry-eve close |
 | Predictions | GEX pin under S0, S1, S2 |
 | Baselines | max pain, nearest 100, no move (eve forward) |
-| Comparison | best baseline by training MAE: **no move** (145.4 pts) |
+| Comparison | the lowest-MAE baseline on each split, on the same expiries (PREREGISTRATION H1): **no move** on training (145.4 pts); the test split picks its own |
 | Statistics | paired Wilcoxon, block bootstrap (10,000 resamples, block 3, seed 20261013) |
 | Success bar | 95% CI of the MAE difference entirely below 0 and p < 0.0167, per convention |
 | Split | train to 30 Mar 2026 (66 expiries), test from 7 Apr 2026 (28 expiries) |
