@@ -1,5 +1,6 @@
 //! Implied volatility: Newton inside a shrinking bracket, Brent when Newton misbehaves.
-//! Converged means |price(σ) − target| < 1e-8, within 50 price evaluations.
+//! Converged means |price(σ) − target| < 1e-8, within 50 price evaluations in total
+//! (Brent reuses the bracket values Newton already computed).
 
 use crate::black76::{OptType, intrinsic, price, vega};
 
@@ -12,7 +13,7 @@ pub const MAX_ITER: usize = 50;
 pub enum IvError {
     /// Non-finite or non-positive F, K, T, or a non-finite price.
     BadInput,
-    /// Target is below the price at SIGMA_LO (at or under intrinsic).
+    /// Target is at or below the price at SIGMA_LO (at or under intrinsic).
     BelowRange,
     /// Target is above the price at SIGMA_HI.
     AboveRange,
@@ -27,16 +28,22 @@ pub fn implied_vol(
     r: f64,
     opt: OptType,
 ) -> Result<f64, IvError> {
-    if !(target.is_finite() && f > 0.0 && k > 0.0 && t > 0.0 && r.is_finite()) {
+    if !(target.is_finite()
+        && f.is_finite()
+        && k.is_finite()
+        && t.is_finite()
+        && f > 0.0
+        && k > 0.0
+        && t > 0.0
+        && r.is_finite())
+    {
         return Err(IvError::BadInput);
     }
     let g = |s: f64| price(f, k, t, r, s, opt) - target;
     let (mut lo, mut hi) = (SIGMA_LO, SIGMA_HI);
-    let (g_lo, g_hi) = (g(lo), g(hi));
-    if g_lo.abs() < PRICE_TOL {
-        return Ok(lo);
-    }
-    if g_lo > 0.0 {
+    let (mut g_lo, mut g_hi) = (g(lo), g(hi));
+    // A target the floor vol already reproduces carries no measurable time value.
+    if g_lo > -PRICE_TOL {
         return Err(IvError::BelowRange);
     }
     if g_hi < -PRICE_TOL {
@@ -60,24 +67,29 @@ pub fn implied_vol(
         }
         // price is increasing in σ, so the sign of d tells which side the root is on
         if d > 0.0 {
-            hi = s;
+            (hi, g_hi) = (s, d);
         } else {
-            lo = s;
+            (lo, g_lo) = (s, d);
         }
         let v = vega(f, k, t, r, s);
         let next = s - d / v;
         if !(v > 0.0 && next > lo && next < hi) {
-            return brent(&g, lo, hi, MAX_ITER - evals);
+            return brent(&g, (lo, g_lo), (hi, g_hi), MAX_ITER - evals);
         }
         s = next;
     }
     Err(IvError::NoConvergence)
 }
 
-/// Brent's method on a sign-changing bracket [a, b].
-fn brent(g: &dyn Fn(f64) -> f64, a: f64, b: f64, max_iter: usize) -> Result<f64, IvError> {
-    let (mut a, mut b) = (a, b);
-    let (mut fa, mut fb) = (g(a), g(b));
+/// Brent's method on a sign-changing bracket [a, b], given g(a) and g(b).
+/// Evaluates g at most `max_iter` times.
+fn brent(
+    g: &dyn Fn(f64) -> f64,
+    (a, fa): (f64, f64),
+    (b, fb): (f64, f64),
+    max_iter: usize,
+) -> Result<f64, IvError> {
+    let (mut a, mut b, mut fa, mut fb) = (a, b, fa, fb);
     if fa * fb > 0.0 {
         return Err(IvError::NoConvergence);
     }
@@ -171,6 +183,22 @@ mod tests {
         assert_eq!(
             implied_vol(f64::NAN, f, k, t, r, OptType::Call),
             Err(IvError::BadInput)
+        );
+        for (f, k, t) in [
+            (f64::INFINITY, k, t),
+            (f, f64::INFINITY, t),
+            (f, k, f64::INFINITY),
+        ] {
+            assert_eq!(
+                implied_vol(1.0, f, k, t, r, OptType::Call),
+                Err(IvError::BadInput)
+            );
+        }
+        // exactly intrinsic (the floor vol's price) is not a valid target either
+        let at_floor = price(f, k, t, r, SIGMA_LO, OptType::Call);
+        assert_eq!(
+            implied_vol(at_floor, f, k, t, r, OptType::Call),
+            Err(IvError::BelowRange)
         );
     }
 

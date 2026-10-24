@@ -21,7 +21,7 @@ pub fn minutes_to_expiry(minute_of_day: f64, sessions_after_today: u32) -> f64 {
 
 /// Trading minutes to years, floored at one minute.
 pub fn t_years(minutes: f64) -> f64 {
-    minutes.max(1.0) / MINUTES_PER_YEAR
+    (minutes / MINUTES_PER_YEAR).max(MIN_T_YEARS)
 }
 
 #[cfg(test)]

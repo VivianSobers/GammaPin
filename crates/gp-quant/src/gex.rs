@@ -85,24 +85,27 @@ impl GammaGrid {
     }
 
     /// Level where net GEX changes sign, nearest to `f`, linearly interpolated.
-    /// None when net GEX keeps one sign over the whole grid.
+    /// Exact zeros are skipped: a crossing is a sign change between consecutive
+    /// nonzero levels, interpolated across any zero run between them.
+    /// None when net GEX keeps one sign over the whole grid, or is zero everywhere.
     pub fn flip(&self, w: Weights, f: f64) -> Option<f64> {
         let net: Vec<f64> = self.net(w).collect();
         let mut best: Option<f64> = None;
-        for i in 0..net.len() {
-            let crossing = if net[i] == 0.0 {
-                Some(self.levels[i])
-            } else if i + 1 < net.len() && net[i] * net[i + 1] < 0.0 {
-                let (x0, x1) = (self.levels[i], self.levels[i + 1]);
-                Some(x0 + (x1 - x0) * net[i] / (net[i] - net[i + 1]))
-            } else {
-                None
-            };
-            if let Some(x) = crossing
-                && best.is_none_or(|b| (x - f).abs() < (b - f).abs())
-            {
-                best = Some(x);
+        let mut last: Option<usize> = None;
+        for (i, &y) in net.iter().enumerate() {
+            if y == 0.0 {
+                continue;
             }
+            if let Some(j) = last
+                && net[j] * y < 0.0
+            {
+                let (x0, x1) = (self.levels[j], self.levels[i]);
+                let x = x0 + (x1 - x0) * net[j] / (net[j] - y);
+                if best.is_none_or(|b| (x - f).abs() < (b - f).abs()) {
+                    best = Some(x);
+                }
+            }
+            last = Some(i);
         }
         best
     }
@@ -192,6 +195,24 @@ mod tests {
         let (f, t, r, lot) = (25_000.0, 2.0 / 252.0, 0.065, 75.0);
         let rows = [row(24_900.0, 5_000.0, 0.0), row(25_100.0, 5_000.0, 0.0)];
         let grid = GammaGrid::new(&rows, &[0.12, 0.12], f, t, r, lot);
+        assert_eq!(grid.flip(Weights::S0, f), None);
+    }
+
+    #[test]
+    fn no_flip_when_all_oi_zero() {
+        let (f, t, r, lot) = (25_000.0, 2.0 / 252.0, 0.065, 75.0);
+        let rows = [row(24_900.0, 0.0, 0.0), row(25_100.0, 0.0, 0.0)];
+        let grid = GammaGrid::new(&rows, &[0.12, 0.12], f, t, r, lot);
+        assert_eq!(grid.flip(Weights::S0, f), None);
+    }
+
+    #[test]
+    fn no_flip_calls_only_short_expiry() {
+        // Few minutes to expiry: gamma underflows to exact zero far from the strikes.
+        let (f, t, r, lot) = (25_000.0, 5.0 / (252.0 * 375.0), 0.065, 75.0);
+        let rows = [row(24_900.0, 5_000.0, 0.0), row(25_100.0, 5_000.0, 0.0)];
+        let grid = GammaGrid::new(&rows, &[0.12, 0.12], f, t, r, lot);
+        assert!(grid.net(Weights::S0).any(|x| x == 0.0));
         assert_eq!(grid.flip(Weights::S0, f), None);
     }
 }
