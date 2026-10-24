@@ -1,0 +1,8 @@
+[Unit]
+Description=Stop the GammaPin monitor at 15:45 IST, after the 15:30 close
+
+[Timer]
+OnCalendar=Mon..Fri 15:45 Asia/Kolkata
+
+[Install]
+WantedBy=timers.target

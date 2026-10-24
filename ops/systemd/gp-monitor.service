@@ -1,6 +1,7 @@
 [Unit]
 Description=GammaPin live monitor (Node C)
 After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
@@ -9,10 +10,9 @@ WorkingDirectory=/opt/gammapin
 # Follows today's node segments under [merge] inbox and serves /ws on [monitor] bind.
 ExecStart=/opt/gammapin/bin/gp-monitor --config /etc/gammapin/gammapin.toml live
 Restart=on-failure
-# The timer starts it before the open; this stops it after the close, so the next day's
-# run follows the new date's directories.
-RuntimeMaxSec=7h
+# gp-monitor.timer starts it before the open and gp-monitor-stop.timer stops it after the
+# close. A stop is clean, so it is not restarted, and the next day's run follows the new
+# date's directories. (RuntimeMaxSec would count as a failure and restart it.)
 Environment=RUST_LOG=info
 
-[Install]
-WantedBy=multi-user.target
+# No [Install]: gp-monitor.timer starts it.

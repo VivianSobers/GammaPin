@@ -1,0 +1,9 @@
+[Unit]
+Description=Stop the GammaPin live monitor after the close
+
+[Service]
+Type=oneshot
+# Runs as root: stopping another unit needs it.
+ExecStart=/usr/bin/systemctl stop gp-monitor.service
+
+# No [Install]: gp-monitor-stop.timer starts it.

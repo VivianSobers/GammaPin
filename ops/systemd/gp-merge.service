@@ -1,10 +1,14 @@
 [Unit]
 Description=GammaPin merge + compress (Node C, after close)
 After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=oneshot
 User=gammapin
 WorkingDirectory=/opt/gammapin
+# Needs the day's segments from Nodes A and B in [merge] inbox first. That copy is an rsync
+# run from each capture node after 15:40 (ops/RUNBOOK.md, daily schedule) and is not a unit
+# here: a copy still running at 15:50 shows up as a torn segment or missing coverage.
 # Exit 3: merged, but some window was missed by every node (see coverage.md).
 ExecStart=/opt/gammapin/bin/gp-merge --config /etc/gammapin/gammapin.toml --date today

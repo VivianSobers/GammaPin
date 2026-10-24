@@ -95,6 +95,7 @@ Open http://127.0.0.1:8080 (no `?mock`) while the monitor runs live. For S1, S2 
 | 08:55 | A, B | `gp-capture.timer` starts capture (window 09:00–15:40) | `journalctl -u gp-capture` shows `capturing` (before 09:00, `waiting for the capture window`) |
 | 08:58 | C | `gp-monitor.timer` starts the live monitor | Page shows `LIVE`, nodes A and B up |
 | 09:05 | A, B | `gp-token-check.timer` | Fails when no token from today exists: check `systemctl --failed` (no alert is wired) |
+| 15:45 | C | `gp-monitor-stop.timer` stops the monitor | `systemctl status gp-monitor` shows inactive (not failed) |
 | 15:40– | A, B | rsync the day's segments into Node C's inbox | Sizes match on both sides |
 | 15:50 | C | `gp-merge.timer` | Exit 0; exit 3 (the unit then shows in `systemctl --failed`) means a window no node captured: read `coverage.md` |
 

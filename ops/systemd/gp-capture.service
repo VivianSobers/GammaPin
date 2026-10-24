@@ -1,18 +1,18 @@
 [Unit]
 Description=GammaPin capture (Upstox V3 -> GPL1)
-After=network-online.target chrony.service
-Wants=network-online.target
+After=network-online.target time-sync.target chrony.service
+Wants=network-online.target time-sync.target
 
 [Service]
 Type=simple
 User=gammapin
 WorkingDirectory=/opt/gammapin
 ExecStart=/opt/gammapin/bin/gp-capture --config /etc/gammapin/gammapin.toml
-Restart=always
+# gp-capture exits 0 by itself when the 09:00-15:40 IST window closes, so only a crash
+# or an error exit is restarted. No RuntimeMaxSec: reaching it counts as a failure and
+# would trigger a restart.
+Restart=on-failure
 RestartSec=1
-# Capture window is 09:00-15:40 IST; the timer starts it, this caps it.
-RuntimeMaxSec=7h
 Environment=RUST_LOG=info
 
-[Install]
-WantedBy=multi-user.target
+# No [Install]: gp-capture.timer starts it.

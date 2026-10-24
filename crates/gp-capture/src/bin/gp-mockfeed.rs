@@ -30,6 +30,7 @@ struct Args {
     seed: u64,
     /// Start the market at the current IST time, one exchange step per frame, so that
     /// exchange time follows the wall clock and the monitor's lag figures are real.
+    /// Needs a nonzero --interval-ms: with 0, frames go out faster than the clock moves.
     #[arg(long)]
     now: bool,
 }
@@ -48,7 +49,8 @@ async fn main() -> anyhow::Result<()> {
         ..MarketConfig::new(date)
     };
     if a.now {
-        let step = a.interval_ms.max(1) as i64;
+        anyhow::ensure!(a.interval_ms > 0, "--now needs a nonzero --interval-ms");
+        let step = a.interval_ms as i64;
         let now = gp_capture::app::now_ms();
         market.step_ms = step;
         market.start_minute = gp_feed::date::ist_minute_of_day(now - step);
