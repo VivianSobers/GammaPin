@@ -3,6 +3,7 @@ from pathlib import Path
 
 import polars as pl
 import pytest
+import requests
 
 import rates
 import tbill_rbi
@@ -45,3 +46,28 @@ def test_to_rates_csv_is_readable_by_rates(tmp_path):
     df = rates.load(out)
     assert df["date"].to_list() == [dt.date(2026, 6, 17), dt.date(2026, 6, 24)]
     assert rates.rate_on(dt.date(2026, 6, 24), df) == pytest.approx(rates.continuous(5.2603))
+
+
+class FakeSession:
+    def __init__(self, *responses):
+        self.responses = list(responses)
+        self.calls = 0
+
+    def get(self, url, **kw):
+        self.calls += 1
+        r = requests.Response()
+        r.status_code, body = self.responses.pop(0)
+        r._content = body.encode()
+        return r
+
+
+def test_fetch_one_unpublished_page_is_not_an_answer(monkeypatch):
+    monkeypatch.setattr(tbill_rbi.time, "sleep", lambda s: None)
+    assert tbill_rbi.fetch_one(FakeSession((200, "<html><body></body></html>")), 1, 0) == (1, tbill_rbi.UNPUBLISHED)
+
+
+def test_fetch_one_retries_only_429_and_5xx(monkeypatch):
+    monkeypatch.setattr(tbill_rbi.time, "sleep", lambda s: None)
+    s = FakeSession((503, ""), (429, ""), (403, ""))
+    assert tbill_rbi.fetch_one(s, 1, 0) == (1, tbill_rbi.FAILED)
+    assert s.calls == 3

@@ -8,7 +8,8 @@ across all press releases. This scans a prid range, keeps those releases and par
 The CSV date is the release date, which is the auction date (results are released the same evening), so
 rates.rate_on's strictly-before rule still applies. Releases where the 91-day tenor shows no YTM are skipped.
 Every page found is listed in `research/cache/tbill_rbi_pages.csv` (prid, date, yield or blank) so a rerun
-only fetches prids not seen before.
+only fetches prids not seen before. A prid not yet published still answers 200 with an empty page (no
+"Date :" header); such pages are not saved, so a later rerun fetches them again.
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ import argparse
 import datetime as dt
 import html
 import re
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -34,7 +36,9 @@ TITLE = re.compile(
     r"Date : (\w{3} \d{1,2}, \d{4}) 91[- ]days?, 182[- ]days? and 364[- ]days? T-Bill Auction Result: Cut-off", re.I
 )
 FAILED = "failed"  # fetch gave up; left out of the pages file so a rerun retries it
-YTM_91 = re.compile(r"Implicit Yield at Cut-Off Price ([\d.]+|NIL) \(YTM: ([\d.]+)%\)")
+UNPUBLISHED = "unpublished"  # empty page for a prid not yet used; also left out
+YTM_91 = re.compile(r"Implicit Yield at Cut-Off Price ([\d.]+) \(YTM: ([\d.]+)%\)")
+Page = tuple[dt.date, float | None] | None
 
 
 def text_of(page: str) -> str:
@@ -42,7 +46,7 @@ def text_of(page: str) -> str:
     return html.unescape(re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", page)))
 
 
-def parse(page: str) -> tuple[dt.date, float | None] | None:
+def parse(page: str) -> Page:
     """(release date, 91-day YTM in percent or None) for an auction-result release; None for any other page."""
     t = text_of(page)
     m = TITLE.search(t)
@@ -53,16 +57,21 @@ def parse(page: str) -> tuple[dt.date, float | None] | None:
     return day, (float(y.group(2)) if y else None)
 
 
-def fetch_one(session: requests.Session, prid: int, pause: float) -> tuple[int, tuple | None]:
-    for attempt in range(4):
+def fetch_one(session: requests.Session, prid: int, pause: float, retries: int = 4) -> tuple[int, Page | str]:
+    """(prid, parse result), or FAILED / UNPUBLISHED. Retries only 429, 5xx and network errors."""
+    for attempt in range(retries):
         try:
             resp = session.get(URL.format(prid=prid), headers=HEADERS, timeout=30)
-            if resp.status_code == 200:
-                time.sleep(pause)
-                return prid, parse(resp.text)
         except (requests.Timeout, requests.ConnectionError):
             pass
-        time.sleep(2.0 * 2**attempt)
+        else:
+            if resp.status_code == 200:
+                time.sleep(pause)
+                return prid, parse(resp.text) if "Date :" in text_of(resp.text) else UNPUBLISHED
+            if resp.status_code != 429 and resp.status_code < 500:
+                return prid, FAILED
+        if attempt + 1 < retries:
+            time.sleep(2.0 * 2**attempt)
     return prid, FAILED
 
 
@@ -75,11 +84,18 @@ def load_pages(path: Path = PAGES) -> pl.DataFrame:
 def scan(lo: int, hi: int, path: Path = PAGES, workers: int = 4, pause: float = 0.5) -> pl.DataFrame:
     """Fetch every prid in [lo, hi] not yet in `path`, saving every 250; return all pages.
 
-    Prids that still fail after retries are not saved, so rerunning the same range picks them up.
+    Prids that still fail after retries, and empty unpublished pages, are not saved, so rerunning the same
+    range picks them up.
     """
     seen = set(load_pages(path)["prid"].to_list())
     todo = [p for p in range(lo, hi + 1) if p not in seen]
-    rows, failed = [], 0
+    rows, failed, unpublished = [], 0, 0
+    local = threading.local()
+
+    def fetch(prid: int) -> tuple[int, Page | str]:
+        if not hasattr(local, "session"):
+            local.session = requests.Session()
+        return fetch_one(local.session, prid, pause)
 
     def save() -> pl.DataFrame:
         old = load_pages(path)
@@ -90,10 +106,11 @@ def scan(lo: int, hi: int, path: Path = PAGES, workers: int = 4, pause: float = 
         return out
 
     with ThreadPoolExecutor(workers) as ex:
-        sessions = [requests.Session() for _ in range(workers)]
-        for i, (prid, got) in enumerate(ex.map(lambda a: fetch_one(sessions[a[0] % workers], a[1], pause), enumerate(todo))):
+        for i, (prid, got) in enumerate(ex.map(fetch, todo)):
             if got == FAILED:
                 failed += 1
+            elif got == UNPUBLISHED:
+                unpublished += 1
             else:
                 day, y = got if got else (None, None)
                 rows.append({"prid": prid, "date": day, "yield_pct": y, "auction": got is not None})
@@ -102,6 +119,8 @@ def scan(lo: int, hi: int, path: Path = PAGES, workers: int = 4, pause: float = 
                 print(f"{i + 1}/{len(todo)} ({failed} failed)", flush=True)
     if failed:
         print(f"{failed} prids failed; rerun the same range to retry them", flush=True)
+    if unpublished:
+        print(f"{unpublished} prids not published yet; not saved", flush=True)
     return save()
 
 

@@ -303,7 +303,7 @@ def main() -> None:
     ap.add_argument("--expiry", type=dt.date.fromisoformat, required=True)
     ap.add_argument("--merged-dir", type=Path, default=MERGED)
     ap.add_argument("--candles", type=Path, help="options candle parquet (default: gpdata.options_path)")
-    ap.add_argument("--r", type=float, required=True, help="RBI 91-day T-bill yield, decimal")
+    ap.add_argument("--r", type=float, required=True, help="continuous decimal rate passed to gp.analyze (rates.rate_on for the date)")
     ap.add_argument("--weights", default="S0", help="comma-separated conventions, e.g. S0,S1,S2")
     ap.add_argument("--start", type=dt.time.fromisoformat, default=dt.time(9, 30))
     ap.add_argument("--end", type=dt.time.fromisoformat, default=dt.time(15, 15))
