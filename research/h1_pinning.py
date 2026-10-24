@@ -114,26 +114,6 @@ def available_expiries() -> list[dt.date]:
     return sorted(dt.date.fromisoformat(p.stem.removeprefix("options_")) for p in gpdata.EXPIRED.glob("options_*.parquet"))
 
 
-def coverage_filter(expiries: list[dt.date], include_incomplete: bool = False) -> tuple[list[dt.date], list[dt.date]]:
-    """(kept, incomplete): `incomplete` lists the expiries not flagged complete in coverage_summary.csv.
-
-    `kept` is the complete expiries, or every expiry with `include_incomplete` (diagnostics only).
-    Without a coverage_summary.csv no expiry passes the check, so the run stops unless `include_incomplete`.
-    """
-    path = gpdata.coverage_summary_path()
-    if not path.exists():
-        msg = f"{path} not found, so no expiry passes the coverage check. Run fetch_expired.py to write it"
-        if not include_incomplete:
-            raise SystemExit(msg + " (or pass --include-incomplete for train diagnostics).")
-        prereg.warn(msg + "; --include-incomplete keeps every expiry.")
-    complete = gpdata.complete_expiries(path)
-    days = sorted(set(expiries))
-    incomplete = [e for e in days if e not in complete]
-    if incomplete and include_incomplete:
-        prereg.warn(f"--include-incomplete keeps {len(incomplete)} expiries that fail the coverage check")
-    return (days if include_incomplete else [e for e in days if e in complete]), incomplete
-
-
 def run_expiry(
     expiry: dt.date,
     decision_time: dt.time,
@@ -178,7 +158,8 @@ def build_table(
     return pl.from_dicts(rows, schema=SCHEMA)
 
 
-def finite_mean(x: np.ndarray) -> float:
+def mean_or_nan(x: np.ndarray) -> float:
+    """Mean of an already-filtered array; NaN when it is empty."""
     return float(x.mean()) if x.size else math.nan
 
 
@@ -190,7 +171,7 @@ def evaluate(table: pl.DataFrame, block_length: int, resamples: int, seed: int) 
     """
     t = table.sort("expiry")
     err = {m: t[f"abs_err_{m}"].cast(pl.Float64).fill_null(math.nan).to_numpy() for m in METHODS}
-    mae = {m: {"mae": finite_mean(e[np.isfinite(e)]), "n": int(np.isfinite(e).sum())} for m, e in err.items()}
+    mae = {m: {"mae": mean_or_nan(e[np.isfinite(e)]), "n": int(np.isfinite(e).sum())} for m, e in err.items()}
     comparisons = []
     for g in GEX_METHODS:
         for b in BASELINES:
@@ -202,7 +183,7 @@ def evaluate(table: pl.DataFrame, block_length: int, resamples: int, seed: int) 
                 boot = stats.block_bootstrap_ci(a - c, block_length, resamples, seed=seed)
             comparisons.append({
                 "gex": g, "baseline": b, "n": n, "n_excluded": t.height - n,
-                "mae_gex": finite_mean(a), "mae_baseline": finite_mean(c),
+                "mae_gex": mean_or_nan(a), "mae_baseline": mean_or_nan(c),
                 "wilcoxon": stats.paired_wilcoxon(a, c),
                 "bootstrap": boot,
                 "note": None if boot else f"bootstrap skipped: {n} pairs < block_length {block_length}",
@@ -270,7 +251,7 @@ def main(argv: list[str] | None = None) -> None:
         prereg.require_frozen()
     cfg = prereg.load()
     available = available_expiries()
-    kept, incomplete = coverage_filter(available, args.include_incomplete)
+    kept, incomplete = gpdata.coverage_filter(available, args.include_incomplete)
     expiries = prereg.expiries_for(args.split, kept, cfg)
     block_length = prereg.block_length(args.split, cfg)
     if not expiries:

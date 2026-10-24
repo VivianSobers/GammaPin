@@ -306,28 +306,6 @@ def available_expiries() -> list[dt.date]:
     return out
 
 
-def coverage_filter(expiries: list[dt.date], include_incomplete: bool = False) -> tuple[list[dt.date], list[dt.date]]:
-    """(kept, incomplete): `incomplete` lists the expiries not flagged complete in coverage_summary.csv.
-
-    `kept` is the complete expiries, or every expiry with `include_incomplete` (diagnostics only).
-    Without a coverage_summary.csv no expiry passes the check, so the run stops unless `include_incomplete`.
-    """
-    import prereg
-
-    path = gpdata.coverage_summary_path()
-    if not path.exists():
-        msg = f"{path} not found, so no expiry passes the coverage check. Run fetch_expired.py to write it"
-        if not include_incomplete:
-            raise SystemExit(msg + " (or pass --include-incomplete for train diagnostics).")
-        prereg.warn(msg + "; --include-incomplete keeps every expiry.")
-    complete = gpdata.complete_expiries(path)
-    days = sorted(set(expiries))
-    incomplete = [e for e in days if e not in complete]
-    if incomplete and include_incomplete:
-        prereg.warn(f"--include-incomplete keeps {len(incomplete)} expiries that fail the coverage check")
-    return (days if include_incomplete else [e for e in days if e in complete]), incomplete
-
-
 def load_index(expiries: list[dt.date]) -> pl.DataFrame:
     frames = [
         pl.read_parquet(gpdata.index_path(e)).select(pl.col("ts").cast(pl.Datetime("ms")), "open", "close")
@@ -371,7 +349,7 @@ def main(argv: list[str] | None = None) -> None:
     all_expiries = available_expiries()
     if not all_expiries:
         raise SystemExit(f"no expiries with options and index candles in {gpdata.EXPIRED}")
-    kept, incomplete = coverage_filter(all_expiries, args.include_incomplete)
+    kept, incomplete = gpdata.coverage_filter(all_expiries, args.include_incomplete)
     # Same rules as H1: the test split refuses while last_train_expiry is TBD (checked before any train warning).
     test_exp = prereg.expiries_for("test", kept, cfg) if args.split == "test" else []
     train_exp = sorted(prereg.expiries_for("train", kept, cfg))

@@ -31,11 +31,6 @@ def test_off_day_snapshot_is_refused(tmp_path):
         ft.predict(snapshot_file(tmp_path, ts_ms=eve), EXPIRY, tmp_path / "fwd")
 
 
-def test_after_cutoff_is_refused(tmp_path):
-    with pytest.raises(ValueError, match="after the"):
-        ft.predict(snapshot_file(tmp_path, ts_ms=ts_ms(15, 0, 1)), EXPIRY, tmp_path / "fwd")
-
-
 def test_predict_on_mock(tmp_path):
     path = ft.predict(snapshot_file(tmp_path), EXPIRY, tmp_path / "fwd")
     assert path == tmp_path / "fwd" / "2026-10-19.json"

@@ -13,7 +13,8 @@ Options candles (`research/cache/expired/options_{expiry}.parquet`), written by 
 Index candles (`research/cache/expired/index_{expiry}.parquet`): ts, open, high, low, close.
 
 Coverage (`research/cache/expired/coverage_summary.csv`, one row per expiry): `complete_expiries` reads
-its `complete` flag. Only complete expiries enter the H1 and H2 samples (PREREGISTRATION "Kept contracts").
+its `complete` flag. Only complete expiries enter the intraday `h1_pinning` and `h2_vol` samples (PREREGISTRATION "H1
+implementation (intraday 14:00, not run)" and "H2 implementation"); `coverage_filter` applies the rule.
 """
 
 from __future__ import annotations
@@ -29,7 +30,6 @@ import gp_quant as gp
 CACHE = Path(__file__).resolve().parent / "cache"
 EXPIRED = CACHE / "expired"
 CANDLE = dt.timedelta(minutes=1)
-SETTLE_TIME = dt.time(15, 30)
 
 
 def options_path(expiry: dt.date) -> Path:
@@ -128,3 +128,25 @@ def analyze_at(
     if len(ch.get("strike", [])) == 0:
         return None
     return analyze_chain(ch, t_years_at(ts, expiry, trading_days), r, float(opts["lot_size"][0]), weights)
+
+
+def coverage_filter(expiries: list[dt.date], include_incomplete: bool = False) -> tuple[list[dt.date], list[dt.date]]:
+    """(kept, incomplete): `incomplete` lists the expiries not flagged complete in coverage_summary.csv.
+
+    `kept` is the complete expiries, or every expiry with `include_incomplete` (diagnostics only).
+    Without a coverage_summary.csv no expiry passes the check, so the run stops unless `include_incomplete`.
+    """
+    import prereg
+
+    path = coverage_summary_path()
+    if not path.exists():
+        msg = f"{path} not found, so no expiry passes the coverage check. Run fetch_expired.py to write it"
+        if not include_incomplete:
+            raise SystemExit(msg + " (or pass --include-incomplete for train diagnostics).")
+        prereg.warn(msg + "; --include-incomplete keeps every expiry.")
+    complete = complete_expiries(path)
+    days = sorted(set(expiries))
+    incomplete = [e for e in days if e not in complete]
+    if incomplete and include_incomplete:
+        prereg.warn(f"--include-incomplete keeps {len(incomplete)} expiries that fail the coverage check")
+    return (days if include_incomplete else [e for e in days if e in complete]), incomplete
