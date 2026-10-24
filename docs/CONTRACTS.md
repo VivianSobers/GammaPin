@@ -72,8 +72,8 @@ Each `conventions.<S>` object:
 | `lag_ms_p99` | number | |
 | `gaps_today` | int | `GAP_START` records today across nodes |
 | `nodes` | object | `{ "A": "up" \| "down", "B": ... }` |
-| `quotes_used` | int | Quotes that passed the filters |
-| `quotes_total` | int | Quotes in the chain |
+| `quotes_used` | int | OTM quotes (one per strike) that passed the filters |
+| `quotes_total` | int | OTM quotes with a bid or ask, so at most one per strike |
 
 The page always shows "Analytics, not trading advice." regardless of the payload.
 

@@ -32,13 +32,6 @@ impl std::ops::Add for ParticipantOi {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Convention {
-    S0,
-    S1,
-    S2,
-}
-
 impl Weights {
     /// S1: net positioning of FII + Pro, scaled by total long OI.
     pub fn s1(fii: ParticipantOi, pro: ParticipantOi, total: ParticipantOi) -> Self {

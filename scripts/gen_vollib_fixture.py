@@ -4,6 +4,7 @@ Run: python scripts/gen_vollib_fixture.py  (needs py_vollib: pip install -r scri
 """
 
 import csv
+import math
 import random
 from pathlib import Path
 
@@ -19,13 +20,16 @@ def main() -> None:
     rows = []
     while len(rows) < 300:
         f = rng.uniform(15_000, 30_000)
-        t = rng.uniform(1 / (252 * 375), 30 / 252)
+        # log-uniform from one trading minute to 30 sessions
+        t = math.exp(rng.uniform(math.log(1 / (252 * 375)), math.log(30 / 252)))
         sigma = rng.uniform(0.05, 1.0)
         r = rng.uniform(0.0, 0.08)
         k = round(f * (1 + rng.uniform(-0.08, 0.08)) / 50) * 50
-        flag = "c" if k >= f else "p"
+        flag = rng.choice("cp")  # independent of moneyness, so ITM quotes are covered too
         price = black(flag, f, k, t, r, sigma)
-        if price < 0.05:
+        intrinsic = math.exp(-r * t) * max(f - k if flag == "c" else k - f, 0.0)
+        # IV is only identifiable from a measurable time value
+        if price - intrinsic < 0.05:
             continue
         rows.append([flag, f, k, t, r, sigma, price, gamma(flag, f, k, t, r, sigma),
                      implied_volatility(price, f, k, r, t, flag)])

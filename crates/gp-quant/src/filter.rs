@@ -1,8 +1,10 @@
 //! Quote filters applied before solving for implied vol:
 //! bid > 0, ask > bid, spread ≤ max(25% of mid, 4 ticks), mid ≥ 0.10,
-//! mid ≥ discounted intrinsic, out-of-the-money only, σ ∈ [0.01, 3.0].
+//! out-of-the-money only, σ ∈ [0.01, 3.0]. An OTM quote's discounted intrinsic is 0,
+//! so the pre-registered "mid < discounted intrinsic" rejection can never fire after
+//! the OTM gate and has no separate check (PREREGISTRATION.md, Deviations, 24 Oct 2026).
 
-use crate::black76::{OptType, intrinsic};
+use crate::black76::OptType;
 use crate::chain::Quote;
 use crate::iv::implied_vol;
 
@@ -25,7 +27,6 @@ pub enum Reject {
     Crossed,
     WideSpread,
     TooCheap,
-    BelowIntrinsic,
     NotOtm,
     IvFailed,
     IvOutOfRange,
@@ -77,9 +78,6 @@ impl FilterConfig {
             return Err(Reject::NotOtm);
         }
         let mid = self.mid(q)?;
-        if mid < intrinsic(f, k, t, r, opt) {
-            return Err(Reject::BelowIntrinsic);
-        }
         let sigma = implied_vol(mid, f, k, t, r, opt).map_err(|_| Reject::IvFailed)?;
         if !(SIGMA_MIN..=SIGMA_MAX).contains(&sigma) {
             return Err(Reject::IvOutOfRange);

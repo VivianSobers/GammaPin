@@ -1,5 +1,7 @@
 //! Python module `gp_quant` (build with `maturin develop` or `pip install ./crates/gp-quant`).
-//! Array functions take 1-D float64 arrays of equal length; use `np.broadcast_arrays` for scalars.
+//! Array functions take 1-D float64 arrays of equal length; for scalars use
+//! `np.full(n, x)` or `np.ascontiguousarray(np.broadcast_to(x, n))` (views from
+//! `np.broadcast_arrays` are not contiguous and are rejected).
 
 use numpy::{PyArray1, PyReadonlyArray1};
 use pyo3::exceptions::PyValueError;

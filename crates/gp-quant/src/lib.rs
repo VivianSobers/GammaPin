@@ -18,7 +18,7 @@ pub use chain::{
 };
 pub use filter::FilterConfig;
 pub use time::MIN_T_YEARS;
-pub use weights::{Convention, ParticipantOi};
+pub use weights::ParticipantOi;
 
 #[cfg(feature = "python")]
 mod python;

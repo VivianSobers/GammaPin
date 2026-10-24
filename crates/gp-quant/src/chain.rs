@@ -97,7 +97,9 @@ pub struct Smile {
     pub iv: Vec<f64>,
     /// `iv` with gaps filled by linear interpolation in strike, flat beyond the ends.
     pub sigma: Vec<f64>,
+    /// OTM quotes that passed every filter.
     pub quotes_used: usize,
+    /// OTM quotes with a bid or an ask (one per strike at most).
     pub quotes_total: usize,
 }
 
@@ -136,14 +138,20 @@ pub fn smile(input: &ChainInput) -> Result<Smile, QuantError> {
         .collect();
     let f = forward(&points, r, t).ok_or(QuantError::NoForward)?;
 
-    let iv: Vec<f64> = rows
+    let otm: Vec<(&Quote, OptType)> = rows
         .iter()
         .map(|row| {
-            let (q, opt) = if row.strike >= f {
+            if row.strike >= f {
                 (&row.call, OptType::Call)
             } else {
                 (&row.put, OptType::Put)
-            };
+            }
+        })
+        .collect();
+    let iv: Vec<f64> = rows
+        .iter()
+        .zip(&otm)
+        .map(|(row, &(q, opt))| {
             cfg.filtered_iv(q, f, row.strike, t, r, opt)
                 .unwrap_or(f64::NAN)
         })
@@ -152,10 +160,10 @@ pub fn smile(input: &ChainInput) -> Result<Smile, QuantError> {
     if quotes_used == 0 {
         return Err(QuantError::NoSmile);
     }
-    let quotes_total = rows
+    // Same side as `quotes_used`: the OTM quote of each strike, when it has a bid or ask.
+    let quotes_total = otm
         .iter()
-        .flat_map(|row| [&row.call, &row.put])
-        .filter(|q| q.bid > 0.0 || q.ask > 0.0)
+        .filter(|(q, _)| q.bid > 0.0 || q.ask > 0.0)
         .count();
     let strikes: Vec<f64> = rows.iter().map(|row| row.strike).collect();
     let sigma = fill_gaps(&strikes, &iv);
@@ -304,7 +312,7 @@ mod tests {
             })
             .count();
         assert_eq!(s.quotes_used, expected);
-        assert_eq!(s.quotes_total, 82);
+        assert_eq!(s.quotes_total, rows.len());
         assert!(s.sigma.iter().all(|v| v.is_finite()));
     }
 
