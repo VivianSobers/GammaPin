@@ -15,6 +15,8 @@ an rbi.org.in press release: `tbill_rbi.py` scans them and writes the CSV below.
 Conversion. RBI's implicit yield y is simple interest, actual/365 (since 27 Oct 2004), so a 91-day bill
 costs P = 100 / (1 + y * 91/365). Black-76 discounts with exp(-r T); matching the same price gives
     r = (365 / 91) * ln(1 + y * 91/365)          (y and r as decimals)
+This r is per calendar year, while gp_quant's T is in trading years (minutes / (252 * 375)), so exp(-r T)
+mixes day counts. Over the few sessions to a weekly expiry the error is ~1e-4 relative and is ignored.
 
 Look-ahead rule: `rate_on(day)` uses the latest auction dated strictly before `day` (auctions are on
 Wednesdays; a same-day cut-off may not be public by the 14:00 IST decision), constant within the day.

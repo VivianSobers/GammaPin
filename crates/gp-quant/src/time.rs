@@ -1,5 +1,6 @@
 //! Time to expiry in trading years: T = trading minutes left to 15:30 on expiry / (252 × 375),
-//! floored at one minute.
+//! floored at one minute. Rates are act/365 (`research/rates.py`), so `e^{-rT}` mixes day counts;
+//! the effect over a few sessions is negligible (PREREGISTRATION.md, Deviations, 24 Oct 2026).
 
 /// 09:15 IST, minutes after midnight.
 pub const SESSION_OPEN: f64 = 9.0 * 60.0 + 15.0;

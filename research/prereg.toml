@@ -1,4 +1,4 @@
-# Values PREREGISTRATION.md marks TBD. Fill every "TBD", commit, tag prereg-v1, then run the test split.
+# Values frozen with PREREGISTRATION.md at tag prereg-v1 (15 Oct 2026). Changes go in its "Deviations" section.
 
 [split]
 train_fraction = 0.7

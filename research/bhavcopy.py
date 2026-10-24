@@ -8,9 +8,10 @@ Columns used (checked on the 13 Oct 2026 file): TradDt, FinInstrmTp (IDO = index
 XpryDt, StrkPric, OptnTp (CE/PE), ClsPric, OpnIntrst, TtlTradgVol, NewBrdLotQty, UndrlygPric.
 
 Units and prices:
-- OpnIntrst is in units (contracts x lot size): ~97% of Nifty option rows divide by NewBrdLotQty, the rest
-  are long-dated contracts listed under an older lot size. `chain` divides by each row's own lot size.
-- ClsPric is NSE's option closing price (equal to SttlmPric on non-expiry days, not the last trade).
+- OpnIntrst is in units (contracts x lot size). `chain` divides it by NewBrdLotQty: ~97% of Nifty option
+  rows divide exactly; the rest (long-dated expiries only, on 13 Oct 2026) give non-integer contracts.
+- ClsPric is NSE's option closing price. It equals SttlmPric on most rows, but for thinly traded strikes it
+  is the last trade price (180 of 1113 traded rows on 16 Oct 2026), which may be stale.
   A strike with TtlTradgVol 0 has a carried-forward close; `chain` sets its price to 0 so the quote
   filters drop it, and keeps its OI.
 

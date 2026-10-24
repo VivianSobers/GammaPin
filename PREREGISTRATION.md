@@ -1,7 +1,6 @@
 # GammaPin Pre-Registration
 
-> **Status: DRAFT, not frozen.**
-> Freeze = commit this file with every `TBD` filled in, tag it `prereg-v1`, and only then open the test set.
+> **Status: frozen 15 Oct 2026, tag `prereg-v1`.**
 > The test set is run once. Any change after the freeze goes in a dated "Deviations" section below.
 
 ## Data
@@ -64,9 +63,9 @@ The first draft used 1-minute option candles from the Upstox Expired Instruments
 - Settlement never a feature.
 - Perturbation test: changing data after the decision time leaves features unchanged.
 
-## Analysis details (draft, not frozen)
+## Analysis details
 
-These are the implementation decisions already in code (`research/`, `crates/gp-quant`). They become pre-registered at the freeze. Values marked `TBD` above are not set here.
+These are the implementation decisions in code (`research/`, `crates/gp-quant`), pre-registered at the freeze.
 
 ### Data and look-ahead
 
@@ -167,3 +166,9 @@ Tests, per (S·, baseline) pair (3 × 3), on the expiries where both errors are 
 ## Deviations
 
 - **18 Oct 2026: a second forward expiry.** The forward test also covers expiry 1 (Mon 19 Oct 2026), published from the 16 Oct bhavcopy before the open, as well as expiry 2 (Tue 27 Oct). Nothing about H1, its data, its metric or its analysis changes, and the training and test results are untouched. Expiry 1 was added once the end-of-day design made it possible without live capture. Both forward expiries are reported whatever their outcome.
+- **24 Oct 2026: editorial corrections, no change to any rule or result.**
+  - The status banner and the "Analysis details" heading still read "draft, not frozen" after the freeze; they now record the freeze. The `prereg-v1` tag is unchanged.
+  - *Block length.* The rationale "≈ n^{1/3} for about 30 training expiries" assumed a smaller sample. The frozen split has 66 training expiries (66^{1/3} ≈ 4.0) and 28 test (≈ 3.0). b = 3 is kept as pre-registered.
+  - *Rate and time conventions.* r is a continuously compounded act/365 rate while T is in trading years (minutes / (252 × 375)), so e^{±rT} mixes day counts. Over the one-session eve horizon this moves F by about 0.01 index points and Γ by about 1e-4 relative; no rule changes.
+  - *Bhavcopy OI units.* "The rest are long-dated contracts under an older lot size" is not supported: on 13 Oct 2026 `NewBrdLotQty` is 65 on every Nifty option row, and only 6 of the 63 rows that do not divide by 65 divide by 75. All 63 are expiries from 29 Dec 2026 on, so the sample's near expiries are unaffected.
+  - *ClsPric.* "Equal to `SttlmPric` on non-expiry days" holds only for traded strikes with enough volume: on 16 Oct 2026, 180 of 1113 traded Nifty option rows have `ClsPric` ≠ `SttlmPric`, and there `ClsPric` equals the last trade. The rule (`ClsPric` when `TtlTradgVol` > 0) is unchanged.
