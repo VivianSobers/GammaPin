@@ -18,7 +18,8 @@ __pycache__/
 *.gpl.zst
 *.parquet
 research/cache/
-research/output/
+research/output/*
+!research/output/h1_eod_test*
 
 # Secrets
 *.token

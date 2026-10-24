@@ -46,7 +46,6 @@ impl Default for Upstox {
 pub struct Capture {
     /// `["HH:MM", "HH:MM"]` IST: start and stop of the capture window.
     pub window_ist: [String; 2],
-    pub token_alert_ist: String,
     pub segment_mib: u64,
     pub flush_ms: u64,
     /// `[first, max]` reconnect delay.
@@ -65,7 +64,6 @@ impl Default for Capture {
     fn default() -> Self {
         Self {
             window_ist: ["09:00".into(), "15:40".into()],
-            token_alert_ist: "09:05".into(),
             segment_mib: 64,
             flush_ms: 100,
             backoff_ms: [100, 5_000],

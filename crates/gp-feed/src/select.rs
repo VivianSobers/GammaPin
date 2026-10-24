@@ -25,7 +25,8 @@ impl Default for Selection {
     }
 }
 
-/// Instruments to subscribe to on `today`, given a reference price (spot or forward).
+/// Instruments to subscribe to on `today`, given a reference price (gp-capture passes the
+/// index spot). A non-finite or non-positive reference selects no options.
 ///
 /// When the band holds more than `max`, the strikes farthest from `reference` are dropped
 /// first; a strike's call and put are kept or dropped together.
@@ -61,7 +62,10 @@ pub fn select(
         let (Some(e), Some(k)) = (i.expiry, i.strike) else {
             continue;
         };
-        if !expiries.contains(&e) || (k - reference).abs() > half {
+        if !(reference.is_finite() && reference > 0.0)
+            || !expiries.contains(&e)
+            || (k - reference).abs() > half
+        {
             continue;
         }
         match groups.iter_mut().find(|g| g.1 == e && g.2 == k) {
@@ -167,6 +171,15 @@ mod tests {
             .map(|i| i.strike.unwrap())
             .collect();
         assert_eq!(strikes, [24_800.0, 24_900.0, 25_000.0, 25_100.0, 25_200.0]);
+    }
+
+    #[test]
+    fn non_finite_reference_selects_no_options() {
+        let u = universe();
+        for r in [f64::NAN, f64::INFINITY, 0.0] {
+            let picked = select(&u, Date::from_ymd(2026, 10, 17), r, Selection::default());
+            assert_eq!(picked.len(), 2, "{r}"); // index + future
+        }
     }
 
     #[test]

@@ -5,16 +5,16 @@ name = "A"                  # A | B | C
 data_dir = "data"           # data/{node}/{date}/seg-{n}.gpl
 
 [upstox]
-token_file = "/etc/gammapin/upstox.token"   # written by `gp auth`, watched by gp-capture
+token_file = "/etc/gammapin/upstox.token"   # access token, written by hand each morning; watched by gp-capture
 instrument_master_url = "https://assets.upstox.com/market-quote/instruments/exchange/NSE.json.gz"
+api_base = "https://api.upstox.com"         # feed authorize endpoint host
 
 [capture]
 window_ist = ["09:00", "15:40"]
-token_alert_ist = "09:05"
 segment_mib = 64
 flush_ms = 100
 backoff_ms = [100, 5000]
-strike_band_pct = 10        # +/- around the forward
+strike_band_pct = 10        # +/- around the index spot
 expiries = 2                # current + next Nifty weekly
 max_instruments = 1500
 master_path = "data/NSE.json.gz"   # cached instrument master

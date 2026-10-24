@@ -209,7 +209,7 @@ From 17 Oct 2026 the live steps above are dropped (see the scope change at the t
 | V1.1 | `gp-log` writer: 32-byte GPL1 header, CRC32C, 64 MiB segments, 100 ms flush | ✅ |
 | V1.2 | `gp-log` reader and crash recovery: truncate at the last valid CRC | ✅ |
 | V1.3 | Basic capture running the same day (raw frames only): needs the live feed; capture itself is V1.5 | ➖ |
-| V1.4 | Instrument list from the instrument master: current + next Nifty weekly, ±10% of forward, ≤ 1,500 | ✅ |
+| V1.4 | Instrument list from the instrument master: current + next Nifty weekly, ±10% of index spot, ≤ 1,500 | ✅ |
 | V1.5 | `gp-capture` (tokio-tungstenite + rustls): built, mock feed; never connected to Upstox | ✅ |
 | V1.6 | Reconnect: backoff with jitter (100 ms → 5 s), resubscribe, `GAP_START`/`GAP_END` | ✅ |
 | V1.7 | Node B running the second connection: no nodes; two-node capture is simulated in the chaos test | ➖ |
