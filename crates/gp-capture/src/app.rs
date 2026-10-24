@@ -14,7 +14,7 @@ use crate::capture::{Summary, capture};
 use crate::client::ConnOpts;
 use crate::config::Config;
 use crate::endpoint::{Endpoint, read_token};
-use crate::recorder::{Recorder, realtime_ns};
+use crate::recorder::{Recorder, conn_id_for, realtime_ns};
 use crate::subscriber::Subscriber;
 use crate::token::TokenWatch;
 
@@ -98,7 +98,8 @@ pub async fn run(
     };
     let mut sub = Subscriber::new(instruments, today, sel, &cfg.node.name);
     let dir = cfg.log_dir(today);
-    let (mut rec, recovery) = Recorder::open(&dir, cfg.writer_config(), 0)?;
+    let (mut rec, recovery) =
+        Recorder::open(&dir, cfg.writer_config(), conn_id_for(&cfg.node.name))?;
     if let Some(r) = recovery {
         tracing::warn!(?r, dir = %dir.display(), "recovered the previous segment");
     }

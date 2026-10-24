@@ -52,13 +52,14 @@ fn checksum(header_tail: &[u8], payload: &[u8]) -> u32 {
 }
 
 /// Build the header for `payload`. The caller guarantees `payload.len() <= MAX_PAYLOAD`.
-pub fn encode_header(
+pub(crate) fn encode_header(
     kind: RecordKind,
     conn_id: u8,
     recv_ns: i64,
     mono_ns: u64,
     payload: &[u8],
 ) -> [u8; HEADER_LEN] {
+    debug_assert!(payload.len() <= MAX_PAYLOAD, "payload over MAX_PAYLOAD");
     let mut h = [0u8; HEADER_LEN];
     h[0..4].copy_from_slice(&MAGIC.to_le_bytes());
     h[4..8].copy_from_slice(&(payload.len() as u32).to_le_bytes());
@@ -72,7 +73,8 @@ pub fn encode_header(
 }
 
 impl Record {
-    pub fn encode_into(&self, out: &mut Vec<u8>) {
+    #[cfg(test)]
+    pub(crate) fn encode_into(&self, out: &mut Vec<u8>) {
         out.extend_from_slice(&encode_header(
             self.kind,
             self.conn_id,

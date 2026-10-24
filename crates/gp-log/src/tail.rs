@@ -18,7 +18,7 @@ pub fn read_log(dir: &Path) -> Result<Vec<Record>, LogError> {
 
 /// Follows a directory that a [`crate::Writer`] is appending to.
 ///
-/// Each [`Tail::poll`] returns the records completed since the last call. A record the
+/// Each [`Tail::poll_skipping_torn`] returns the records completed since the last call. A record the
 /// writer has only partly flushed is held back until the rest arrives. The tail moves to the
 /// next segment once that segment exists and the current one has no bytes left.
 ///
@@ -30,6 +30,8 @@ pub struct Tail {
     offset: u64,
     pending: Vec<u8>,
     deferred: Option<LogError>,
+    /// The current segment is compressed and already read in full.
+    drained: bool,
 }
 
 impl Tail {
@@ -41,6 +43,7 @@ impl Tail {
             offset: 0,
             pending: Vec::new(),
             deferred: None,
+            drained: false,
         }
     }
 
@@ -60,10 +63,15 @@ impl Tail {
 
     fn read_new_bytes(&mut self, path: &Path, compressed: bool) -> Result<(), LogError> {
         if compressed {
+            // a compressed segment is complete: decompress it once
+            if self.drained {
+                return Ok(());
+            }
             let all = segment_bytes(path)?;
             let start = (self.offset as usize).min(all.len());
             self.pending.extend_from_slice(&all[start..]);
             self.offset = all.len() as u64;
+            self.drained = true;
         } else {
             let mut f = fs::File::open(path)?;
             f.seek(SeekFrom::Start(self.offset))?;
@@ -95,13 +103,15 @@ impl Tail {
         }
     }
 
-    /// Records completed since the last call, possibly across several segments.
-    pub fn poll(&mut self) -> Result<Vec<Record>, LogError> {
+    /// Records completed since the last call, possibly across several segments. A torn
+    /// tail is an error (tests use this strict form; readers use `poll_skipping_torn`).
+    #[cfg(test)]
+    pub(crate) fn poll(&mut self) -> Result<Vec<Record>, LogError> {
         self.poll_inner(false).map(|(r, _)| r)
     }
 
-    /// Like [`Tail::poll`], but a segment left with a torn tail by a writer crash is skipped
-    /// past instead of failing, keeping the records before the tear. Returns the number of
+    /// Records completed since the last call, possibly across several segments. A segment
+    /// left with a torn tail by a writer crash is skipped past instead of failing, keeping the records before the tear. Returns the number of
     /// bytes skipped.
     pub fn poll_skipping_torn(&mut self) -> Result<(Vec<Record>, u64), LogError> {
         self.poll_inner(true)
@@ -170,6 +180,7 @@ impl Tail {
                     }
                     self.index = Some(next.index);
                     self.offset = 0;
+                    self.drained = false;
                 }
                 None => return Ok(()),
             }

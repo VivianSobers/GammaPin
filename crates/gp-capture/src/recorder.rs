@@ -1,4 +1,5 @@
-//! One connection's GPL1 log: every frame is written as received, with both clocks.
+//! The capture process's GPL1 log: every frame of every connection is written as received,
+//! with both clocks.
 
 use std::path::PathBuf;
 
@@ -26,6 +27,16 @@ pub fn monotonic_ns() -> u64 {
     ts.tv_sec as u64 * 1_000_000_000 + ts.tv_nsec as u64
 }
 
+/// Record `conn_id` for a capture node: A → 1, B → 2, anything else 0. It tags which node
+/// wrote a log; readers do not depend on it.
+pub fn conn_id_for(node: &str) -> u8 {
+    match node {
+        "A" => 1,
+        "B" => 2,
+        _ => 0,
+    }
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Stats {
     pub frames: u64,
@@ -41,7 +52,8 @@ pub struct Recorder {
 }
 
 impl Recorder {
-    /// Open (and recover) the log in `dir` for connection `conn_id`.
+    /// Open (and recover) the log in `dir`. `conn_id` is stamped on every record; the
+    /// capture binary passes [`conn_id_for`] of its node name.
     pub fn open(
         dir: impl Into<PathBuf>,
         cfg: WriterConfig,

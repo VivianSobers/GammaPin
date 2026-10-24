@@ -84,7 +84,8 @@ pub struct Recovery {
     pub dropped_bytes: u64,
 }
 
-/// Truncate a segment at the end of its last valid record.
+/// Truncate a segment at its first invalid byte. The valid prefix is kept; everything
+/// after it is discarded, including any records that would decode further on.
 ///
 /// Only for uncompressed segments: a `.gpl.zst` file is refused, since truncating its
 /// compressed bytes would destroy it.
@@ -132,7 +133,10 @@ fn sync_dir(dir: &Path) -> Result<(), LogError> {
 ///
 /// The segment is validated first, so a torn file is never compressed. The new file is
 /// written under a temporary name and renamed, so a crash leaves either the original or
-/// both files, never a partial `.gpl.zst`.
+/// both files, never a partial `.gpl.zst`. Leftovers are harmless but not removed here:
+/// a stale `.gpl.zst.tmp` is ignored by [`list_segments`] and overwritten by the next
+/// attempt, and an original `.gpl` left beside its `.gpl.zst` is hidden by
+/// [`list_segments`] and can be deleted by hand.
 pub fn compress_segment(path: &Path) -> Result<PathBuf, LogError> {
     let buf = fs::read(path)?;
     let s = scan(&buf);

@@ -1,13 +1,14 @@
-//! Rotating GPL1 writer. Not thread-safe; the capture task owns one per connection.
+//! Rotating GPL1 writer. Not thread-safe; the capture process owns one for its log directory.
 
 use std::fs::{File, OpenOptions};
 use std::io::{BufWriter, Write};
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
+use crate::record::encode_header;
 use crate::{
     FLUSH_INTERVAL_MS, HEADER_LEN, LogError, MAX_PAYLOAD, RecordKind, Recovery, SEGMENT_BYTES,
-    encode_header, list_segments, recover_segment, segment_file_name,
+    list_segments, recover_segment, segment_file_name,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -48,7 +49,8 @@ fn create_segment(dir: &std::path::Path, index: u32) -> Result<BufWriter<File>, 
 }
 
 impl Writer {
-    /// Open a log directory: recover the newest uncompressed segment, then start a new one after it.
+    /// Open a log directory: if the highest-index segment is uncompressed, recover it (older
+    /// segments were closed by rotation and are left alone); then start a new segment after it.
     pub fn open(
         dir: impl Into<PathBuf>,
         cfg: WriterConfig,
@@ -62,7 +64,9 @@ impl Writer {
                 if !last.compressed {
                     recovery = Some(recover_segment(&last.path)?);
                 }
-                last.index + 1
+                last.index.checked_add(1).ok_or_else(|| {
+                    LogError::Io(std::io::Error::other("segment index space exhausted"))
+                })?
             }
             None => 0,
         };
@@ -162,7 +166,10 @@ impl Writer {
     }
 
     pub fn close(mut self) -> Result<(), LogError> {
-        self.flush()
+        self.flush()?;
+        // flushed and synced: nothing left for Drop to do
+        self.file = None;
+        Ok(())
     }
 }
 
@@ -234,14 +241,6 @@ mod tests {
     }
 
     #[test]
-    fn oversized_payload_does_not_poison() {
-        let dir = tempfile::tempdir().unwrap();
-        let (mut w, _) = Writer::open(dir.path(), cfg(100, Duration::ZERO)).unwrap();
-        assert!(w.append(RecordKind::RawFrame, 1, 0, 0, &[0; 69]).is_err());
-        w.append(RecordKind::RawFrame, 1, 0, 0, &[0; 68]).unwrap();
-    }
-
-    #[test]
     fn rotates_without_splitting_records() {
         let dir = tempfile::tempdir().unwrap();
         let rec_len = (HEADER_LEN + 10) as u64;
@@ -270,6 +269,7 @@ mod tests {
             .append(RecordKind::RawFrame, 1, 0, 0, &[0; 69])
             .unwrap_err();
         assert!(matches!(err, LogError::PayloadTooLarge(_)));
+        // and does not poison the writer
         w.append(RecordKind::RawFrame, 1, 0, 0, &[0; 68]).unwrap();
         assert_eq!(w.segment_index(), 0);
     }
