@@ -120,7 +120,7 @@ From 17 Oct 2026 the live steps above are dropped (see the scope change at the t
 | G2.8 | Confirm the settlement method from NSE's official contract specs | ✅ |
 | G2.9 | `settlements.py`: official Nifty 50 close on each expiry day (the H1 target) | ✅ |
 
-**🚩 CP-G2:** expiries on disk with a coverage report; participant OI and rates load. ✅
+**🚩 CP-G2:** expiries on disk with a coverage report; participant OI and rates load. ✅ [Coverage](docs/COVERAGE.md)
 
 ## G3: GEX engine (days 3–5) · `crates/gp-quant`
 
