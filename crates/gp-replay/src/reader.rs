@@ -141,6 +141,13 @@ impl ReplayFile {
             buf: &b[HEADER_LEN..events_at],
             at: 0,
         };
+        // smallest table entry: two empty strings (2 + 2), kind 1, expiry 4, strike 8, lot 4
+        const MIN_ENTRY: usize = 21;
+        if n_instruments as usize > table_len / MIN_ENTRY {
+            return Err(FormatError::Table(
+                "more instruments than the table can hold",
+            ));
+        }
         let mut metas = Vec::with_capacity(n_instruments as usize);
         for _ in 0..n_instruments {
             let instrument_key = cur.str()?;
@@ -313,6 +320,14 @@ mod tests {
         assert!(matches!(
             ReplayFile::from_bytes(b),
             Err(FormatError::Instrument(0, 7))
+        ));
+
+        // an instrument count the table cannot hold, with a matching checksum
+        let mut b = good.clone();
+        b[8..12].copy_from_slice(&u32::MAX.to_le_bytes());
+        assert!(matches!(
+            ReplayFile::from_bytes(b),
+            Err(FormatError::Table(_))
         ));
     }
 

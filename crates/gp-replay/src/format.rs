@@ -2,10 +2,10 @@
 //!
 //! ```text
 //! header   magic "GPR1" · version u32 = 1 · n_instruments u32 · n_events u64 · crc32c u32
-//!          · table_len u32                                   (28 bytes, little-endian)
+//!          · table_len u32 (table plus its padding)          (28 bytes, little-endian)
 //! table    per instrument: key (u16 len + UTF-8) · underlying (u16 len + UTF-8) · kind u8
 //!          · expiry i32 (i32::MIN = none) · strike f64 (NaN = none) · lot_size i32
-//! padding  zeros to an 8-byte boundary
+//! padding  zeros to an 8-byte boundary, counted in table_len
 //! events   n_events fixed 216-byte records:
 //!          instrument u32 · src_mask u8 · 3 zero bytes · ltt_ms i64 · recv_ns i64 · ltp f64
 //!          · ltq i64 · cum_volume i64 · oi i64 · bid_px [f64; 5] · bid_qty [i64; 5]
@@ -67,6 +67,8 @@ pub enum FormatError {
     Instrument(u64, u32),
     #[error("events are not in replay order (sort_for_replay)")]
     Order,
+    #[error("instrument {0} has different contract metadata in different events")]
+    Meta(String),
 }
 
 fn kind_code(k: Kind) -> u8 {
@@ -116,14 +118,19 @@ pub fn encode(events: &[Event]) -> Result<Vec<u8>, FormatError> {
     if !crate::is_replay_order(events) {
         return Err(FormatError::Order);
     }
-    let mut index: HashMap<&str, u32> = HashMap::new();
+    let mut index: HashMap<&str, (u32, Meta)> = HashMap::new();
     let mut table = Vec::new();
     let mut n_instruments = 0u32;
     let mut body = Vec::with_capacity(events.len() * EVENT_LEN);
     let mut ids = Vec::with_capacity(events.len());
     for e in events {
         let id = match index.get(e.instrument_key.as_str()) {
-            Some(&id) => id,
+            Some((id, m)) => {
+                if *m != Meta::of(e) {
+                    return Err(FormatError::Meta(e.instrument_key.clone()));
+                }
+                *id
+            }
             None => {
                 let m = Meta::of(e);
                 put_str(&mut table, &m.instrument_key)?;
@@ -132,7 +139,7 @@ pub fn encode(events: &[Event]) -> Result<Vec<u8>, FormatError> {
                 table.extend_from_slice(&m.expiry.map_or(i32::MIN, |d| d.0).to_le_bytes());
                 table.extend_from_slice(&m.strike.unwrap_or(f64::NAN).to_le_bytes());
                 table.extend_from_slice(&m.lot_size.to_le_bytes());
-                index.insert(&e.instrument_key, n_instruments);
+                index.insert(&e.instrument_key, (n_instruments, m));
                 n_instruments += 1;
                 n_instruments - 1
             }
@@ -230,6 +237,14 @@ pub(crate) mod tests {
     fn refuses_unordered_events() {
         let evs = vec![event("a", Kind::Ce, 2, 0, 1), event("b", Kind::Ce, 1, 0, 1)];
         assert!(matches!(encode(&evs), Err(FormatError::Order)));
+    }
+
+    #[test]
+    fn refuses_changing_metadata() {
+        let mut later = event("a", Kind::Ce, 2, 0, 1);
+        later.lot_size = 75;
+        let evs = vec![event("a", Kind::Ce, 1, 0, 1), later];
+        assert!(matches!(encode(&evs), Err(FormatError::Meta(k)) if k == "a"));
     }
 
     #[test]

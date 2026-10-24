@@ -74,16 +74,27 @@ pub struct Paced<S> {
     held: Option<Event>,
     /// (wall ms, ltt_ms) of the first event.
     anchor: Option<(f64, i64)>,
+    /// `ltt_ms` of the last event released (not of one still held back).
+    position_ms: Option<i64>,
 }
 
 impl<S: EventStream> Paced<S> {
+    /// Panics on `Speed::Multiple` that is not positive and finite: use `Speed::Max` for
+    /// full speed (`Speed::parse` never returns such a value).
     pub fn new(inner: S, speed: Speed, clock: Box<dyn Clock>) -> Self {
+        if let Speed::Multiple(x) = speed {
+            assert!(
+                x > 0.0 && x.is_finite(),
+                "replay speed must be positive and finite, got {x}"
+            );
+        }
         Self {
             inner,
             rate: speed.rate(),
             clock,
             held: None,
             anchor: None,
+            position_ms: None,
         }
     }
 
@@ -105,7 +116,11 @@ impl<S: EventStream> EventStream for Paced<S> {
 
     fn poll_event(&mut self) -> Result<Poll, StreamError> {
         let Some(rate) = self.rate else {
-            return self.inner.poll_event();
+            let p = self.inner.poll_event()?;
+            if let Poll::Ready(e) = &p {
+                self.position_ms = Some(e.ltt_ms);
+            }
+            return Ok(p);
         };
         if self.held.is_none() {
             match self.inner.poll_event()? {
@@ -119,6 +134,7 @@ impl<S: EventStream> EventStream for Paced<S> {
         let (wall, ltt) = self.anchor.expect("set with the first event");
         let e = self.held.as_ref().expect("held");
         if self.clock.now_ms() >= wall + (e.ltt_ms - ltt) as f64 / rate {
+            self.position_ms = Some(e.ltt_ms);
             Ok(Poll::Ready(self.held.take().expect("held")))
         } else {
             Ok(Poll::Pending)
@@ -126,7 +142,7 @@ impl<S: EventStream> EventStream for Paced<S> {
     }
 
     fn position_ms(&self) -> Option<i64> {
-        self.inner.position_ms()
+        self.position_ms
     }
 
     fn take_gaps(&mut self) -> Vec<i64> {
@@ -168,6 +184,8 @@ mod tests {
             assert_eq!(p.wait_ms(), step);
             clock.advance(step - 1.0);
             assert!(drain_ready(&mut p).is_empty());
+            // 1,500 is held, not released: the position stays at the last release
+            assert_eq!(p.position_ms(), Some(1_000));
             clock.advance(1.0);
             assert_eq!(drain_ready(&mut p), [1_500]);
             clock.advance(3.0 * step);
@@ -181,6 +199,16 @@ mod tests {
         let mut p = Paced::new(stream(), Speed::Max, Box::new(ManualClock::default()));
         assert_eq!(drain_ready(&mut p), [1_000, 1_000, 1_500, 3_000]);
         assert_eq!(p.wait_ms(), 0.0);
+    }
+
+    #[test]
+    #[should_panic(expected = "positive and finite")]
+    fn rejects_zero_multiple() {
+        let _ = Paced::new(
+            stream(),
+            Speed::Multiple(0.0),
+            Box::new(ManualClock::default()),
+        );
     }
 
     #[test]
