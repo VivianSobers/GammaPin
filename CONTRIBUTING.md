@@ -35,10 +35,10 @@ The project runs as **two independent tracks**. Every phase belongs to one perso
 
 | # | What | From → To | Ready by | Needed by | Until then, the receiver uses |
 |---|---|---|---|---|---|
-| H1 | Contracts C1, C2, C3 | Guru → Vivian | Day 0 | Day 4 | n/a |
-| H2 | `gp_quant::analyze` (C3) implemented | Guru → Vivian | Day 4 | Day 8 | Signature from C3 |
+| H1 | Contracts C1, C2, C3 (✅ done) | Guru → Vivian | Day 0 | Day 4 | n/a |
+| H2 | `gp_quant::analyze` (C3) implemented (✅ done) | Guru → Vivian | Day 4 | Day 8 | Signature from C3 |
 | H3 | Merged expiry-1 Parquet (C1) (➖ dropped) | Vivian → Guru | Day 7 evening | Day 10 | Synthetic C1 fixtures in tests |
-| H4 | `gp-monitor` serving `/ws` (C2): built, serves live (mock feed) and replay | Vivian → Guru | Day 9 | Day 13 | `static/mock/snapshot.json` |
+| H4 | `gp-monitor` serving `/ws` (C2): built, serves live (mock feed) and replay (✅ done) | Vivian → Guru | Day 9 | Day 13 | `static/mock/snapshot.json` |
 | H5 | Daily Upstox token (➖ dropped) | Guru (account holder) → Nodes A, B | 08:45 daily | 09:00 daily | Token sync built by Vivian in V1 |
 
 ## Timeline
@@ -86,9 +86,9 @@ From 17 Oct 2026 the live steps above are dropped (see the scope change at the t
 | G0.10 | Novelty check: SSRN, arXiv, GitHub for "Nifty gamma exposure" | ✅ |
 | G0.11 | ~~Upstox account, Plus plan (check price), API app~~ Dropped: no live feed (scope change) | ➖ |
 | G0.12 | ~~Node C: Ubuntu 24.04, chrony from `ops/chrony.conf`, inbox for A/B segments~~ Dropped: no capture nodes | ➖ |
-| G0.13 | Add Vivian as collaborator, branch protection on `main` | ❌ |
+| G0.13 | Add Vivian as collaborator, branch protection on `main`: Vivian added (write access); branch protection still open | ❌ |
 
-**🚩 CP-G0:** contracts merged (the Upstox token step is dropped). ❌
+**🚩 CP-G0:** contracts merged (the Upstox token step is dropped). ✅
 
 ## G1: Pricing core (days 1–3) · `crates/gp-quant`
 
