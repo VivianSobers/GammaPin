@@ -68,7 +68,7 @@ pub struct Analysis {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum QuantError {
-    /// Fewer than one strike with usable call and put mids.
+    /// No strike with usable call and put mids.
     NoForward,
     /// No strike produced an implied vol.
     NoSmile,

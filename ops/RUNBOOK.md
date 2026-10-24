@@ -92,11 +92,11 @@ Open http://127.0.0.1:8080 (no `?mock`) while the monitor runs live. For S1, S2 
 | Time | Node | Step | Check |
 |---|---|---|---|
 | 08:45 | C | Log in, write the day's token to `/etc/gammapin/upstox.token` on A and B | `gp-capture check-token` exits 0 on both |
-| 08:55 | A, B | `gp-capture.timer` starts capture (window 09:00–15:40) | `journalctl -u gp-capture` shows the subscription |
+| 08:55 | A, B | `gp-capture.timer` starts capture (window 09:00–15:40) | `journalctl -u gp-capture` shows `capturing` (before 09:00, `waiting for the capture window`) |
 | 08:58 | C | `gp-monitor.timer` starts the live monitor | Page shows `LIVE`, nodes A and B up |
-| 09:05 | A, B | `gp-token-check.timer` | Fails (and alerts) when no token from today exists |
+| 09:05 | A, B | `gp-token-check.timer` | Fails when no token from today exists: check `systemctl --failed` (no alert is wired) |
 | 15:40– | A, B | rsync the day's segments into Node C's inbox | Sizes match on both sides |
-| 15:50 | C | `gp-merge.timer` | Exit 0; exit 3 means a window no node captured: read `coverage.md` |
+| 15:50 | C | `gp-merge.timer` | Exit 0; exit 3 (the unit then shows in `systemctl --failed`) means a window no node captured: read `coverage.md` |
 
 | Symptom | Action |
 |---|---|

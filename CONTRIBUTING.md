@@ -198,7 +198,7 @@ From 17 Oct 2026 the live steps above are dropped (see the scope change at the t
 | V0.1 | Ubuntu 24.04 on Node A and Node B | ➖ |
 | V0.2 | chrony from `ops/chrony.conf` on A and B, offset < 5 ms | ➖ |
 | V0.3 | LAN to Node C; A and B can rsync segments into Node C's inbox | ➖ |
-| V0.4 | `MarketDataFeedV3.proto` downloaded into `proto/` | ✅ |
+| V0.4 | `MarketDataFeed.proto` (V3) downloaded into `proto/` | ✅ |
 
 **🚩 CP-V0:** both nodes synced and able to reach Node C. ➖
 
@@ -214,7 +214,7 @@ From 17 Oct 2026 the live steps above are dropped (see the scope change at the t
 | V1.6 | Reconnect: backoff with jitter (100 ms → 5 s), resubscribe, `GAP_START`/`GAP_END` | ✅ |
 | V1.7 | Node B running the second connection: no nodes; two-node capture is simulated in the chaos test | ➖ |
 | V1.8 | `gp auth` CLI and token sync from Node C to A/B (need the account); the `notify` hot-reload and `TOKEN_RELOAD` record are built | ➖ |
-| V1.9 | 09:05 alert when no valid token: `gp-capture check-token` and `gp-token-check.timer` | ✅ |
+| V1.9 | 09:05 check that fails when no valid token (no alert is wired; see `systemctl --failed`): `gp-capture check-token` and `gp-token-check.timer` | ✅ |
 | V1.10 | zstd compression of segments after close: done by `gp-merge` once the day is merged | ✅ |
 | V1.11 | Crash test: kill capture mid-write, confirm recovery (three `SIGKILL`s, mock feed) | ✅ |
 | V1.12 | systemd units from `ops/systemd/` installed on A and B: units updated for the built binaries, no nodes | ➖ |

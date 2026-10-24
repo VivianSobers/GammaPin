@@ -7,7 +7,7 @@ Each side builds against the contract with its own fixtures. A change here needs
 
 Producer: `gp-merge` (Vivian). Consumers: `gp-replay`, `research/validate_ticks.py` (Guru).
 
-One row per de-duplicated feed update. The same fields, in the same order, are the replay record.
+One row per de-duplicated feed update. The replay record (`gp-replay`'s `GPR1`) carries the same fields in a different layout: the contract metadata (`instrument_key` to `lot_size`) sits once per instrument in a table, and each event holds an instrument index and `src_mask` followed by the market fields.
 
 | Column | Arrow type | Notes |
 |---|---|---|
@@ -51,7 +51,7 @@ Producer: `gp-monitor` server (Vivian). Consumer: `static/index.html` (Guru).
 | `t_years` | number | Time to expiry used |
 | `conventions` | object | Keyed by `"S0"`, `"S1"` (and optionally `"S2"`), see below |
 | `strikes` | number[] | Strikes in ascending order, shared by every `gex` array |
-| `h1_accuracy` | object or null | Keyed by convention: `{ "mae": number, "n": int }` from training-set H1 |
+| `h1_accuracy` | object or null | Null when no accuracy is configured. Otherwise keyed by every convention shown: `{ "mae": number, "n": int }` from training-set H1, or null for a convention with no configured figure |
 | `health` | object | See below |
 
 Each `conventions.<S>` object:
@@ -116,6 +116,6 @@ pub struct Analysis {
 pub fn analyze(input: &ChainInput, weights: &[Weights]) -> Result<Analysis, QuantError>;
 ```
 
-- `gp-monitor` builds `rows` from the latest C1 event per instrument, calls `analyze` once per second per expiry, and maps the result to C2. `regime` in C2 is the sign of `net_gex`.
+- `gp-monitor` builds `rows` from the latest C1 event per instrument, calls `analyze` once per second on the front expiry only (the nearest expiry in the book on or after today), and maps the result to C2. `regime` in C2 is the sign of `net_gex`.
 - When there is a quote, its mid is (bid + ask) / 2. In candle mode, pass `bid = ask = close`.
-- `analyze` never panics on bad quotes. It drops them and counts them in `quotes_used`.
+- `analyze` never panics on bad quotes. It drops them; `quotes_used` counts only the quotes it accepted.
