@@ -1,7 +1,7 @@
 """Coverage of the end-of-day caches over the H1 sample: which expiries have the inputs h1_eod.py needs.
 
-Per Nifty expiry in h1_eod.sample (nearest listed expiries in prereg.toml [h1_eod], eve cached): eve and
-expiry-day bhavcopy present, Nifty option rows on the eve, participant OI usable for the eve
+Per Nifty expiry in h1_eod.sample (nearest listed expiries in prereg.toml [h1_eod], eve cached): eve bhavcopy present
+by construction, expiry-day bhavcopy present, Nifty option rows on the eve, participant OI usable for the eve
 (the date rule of participant_oi.weights_for), and a T-bill rate (rates.rate_on).
 
 Missing trading days: research has no holiday table (docs/CALENDAR.md covers Oct-Dec 2026 only), so a
@@ -44,12 +44,6 @@ def ok(fn: Callable, *a) -> bool:
         return False
 
 
-def poi_ok(day: dt.date, poi: pl.DataFrame) -> bool:
-    """The date rule of participant_oi.weights_for (a file before `day`, at most MAX_AGE old), without gp_quant."""
-    prior = poi.filter(pl.col("date") < day)
-    return not prior.is_empty() and day - prior["date"].max() <= participant_oi.MAX_AGE
-
-
 def report(
     days: list[dt.date],
     load: Callable[[dt.date], pl.DataFrame],
@@ -67,11 +61,10 @@ def report(
         rows.append({
             "expiry": e,
             "eve": eve,
-            "eve_bhavcopy": True,
             "expiry_bhavcopy": e in have,
             "contracts": df.height,
             "contracts_expiry": df.filter(pl.col("expiry") == e).height,
-            "participant_oi": poi_ok(eve, poi),
+            "participant_oi": ok(participant_oi.latest_before, eve, poi),
             "tbill": ok(rates.rate_on, eve, rate_df),
         })
     span = participant_oi.weekdays(min(days), max(days)) if days else []
@@ -101,12 +94,12 @@ def markdown(rep: dict) -> str:
         "",
         "Contracts = Nifty option rows in the eve bhavcopy (all expiries / this expiry).",
         "",
-        "| Expiry | Eve | Eve bhavcopy | Expiry bhavcopy | Contracts | This expiry | Participant OI | T-bill |",
-        "|---|---|---|---|---|---|---|---|",
+        "| Expiry | Eve | Expiry bhavcopy | Contracts | This expiry | Participant OI | T-bill |",
+        "|---|---|---|---|---|---|---|",
     ]
     for r in rows:
         lines.append(
-            f"| {r['expiry']} | {r['eve']} | {yn(r['eve_bhavcopy'])} | {yn(r['expiry_bhavcopy'])} | {r['contracts']} "
+            f"| {r['expiry']} | {r['eve']} | {yn(r['expiry_bhavcopy'])} | {r['contracts']} "
             f"| {r['contracts_expiry']} | {yn(r['participant_oi'])} | {yn(r['tbill'])} |"
         )
     lines += ["", "## Holidays inferred", "", ", ".join(d.isoformat() for d in rep["holidays"]) or "none", ""]

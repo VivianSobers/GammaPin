@@ -125,8 +125,6 @@ def analyze_at(
 ) -> dict | None:
     """gp_quant.analyze on the candle chain as of `ts`. None when no forward or smile exists."""
     ch = chain_at(opts, ts)
-    if len(ch.get("strike", [])) == 0:
-        return None
     return analyze_chain(ch, t_years_at(ts, expiry, trading_days), r, float(opts["lot_size"][0]), weights)
 
 

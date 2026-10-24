@@ -4,7 +4,7 @@ import pytest
 
 MODULES = [
     "fetch_expired", "participant_oi", "instruments", "rates", "settlements",
-    "h1_pinning", "h2_vol", "validate_ticks", "forward_test",
+    "h1_pinning", "h2_vol", "validate_ticks", "forward_test", "bhavcopy", "tbill_rbi", "bhav_coverage", "h1_eod",
 ]
 
 

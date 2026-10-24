@@ -24,8 +24,6 @@ from pathlib import Path
 import polars as pl
 import requests
 
-import gp_quant as gp
-
 URL = "https://archives.nseindia.com/content/nsccl/fao_participant_oi_{stamp}.csv"
 CACHE_DIR = Path(__file__).resolve().parent / "cache" / "participant_oi"
 HEADERS = {
@@ -153,15 +151,23 @@ def option_index(df: pl.DataFrame, client_type: str) -> tuple[float, float, floa
     return tuple(float(x) for x in row)
 
 
-def weights_for(day: dt.date, df: pl.DataFrame) -> dict[str, tuple[float, float]]:
-    """S0, S1, S2 weights for trading on `day`, from the latest file dated strictly before `day`."""
+def latest_before(day: dt.date, df: pl.DataFrame) -> dt.date:
+    """The date of the latest file dated strictly before `day`; LookupError if none or older than MAX_AGE."""
     prior = df.filter(pl.col("date") < day)
     if prior.is_empty():
         raise LookupError(f"no participant OI before {day}")
     latest = prior["date"].max()
     if day - latest > MAX_AGE:
         raise LookupError(f"latest participant OI before {day} is {latest}, older than {MAX_AGE.days} days")
-    snap = prior.filter(pl.col("date") == latest)
+    return latest
+
+
+def weights_for(day: dt.date, df: pl.DataFrame) -> dict[str, tuple[float, float]]:
+    """S0, S1, S2 weights for trading on `day`, from the latest file dated strictly before `day`."""
+    import gp_quant as gp  # here, so the download/parse helpers import without the extension
+
+    latest = latest_before(day, df)
+    snap = df.filter(pl.col("date") == latest)
     s1 = gp.weights_s1(option_index(snap, "FII"), option_index(snap, "Pro"), option_index(snap, "TOTAL"))
     s2 = gp.weights_s2(option_index(snap, "Client"), option_index(snap, "TOTAL"))
     return {"S0": (1.0, -1.0), "S1": (float(s1[0]), float(s1[1])), "S2": (float(s2[0]), float(s2[1]))}
