@@ -183,9 +183,20 @@ def in_band(contracts: list[dict], center: float, pct: float) -> list[dict]:
     return [c for c in contracts if abs(float(c["strike_price"]) - center) <= half]
 
 
-def coverage(expiry: dt.date, contracts: list[dict], frames: dict[str, pl.DataFrame], index: pl.DataFrame):
-    """(per-contract coverage frame, one-row summary frame) for one expiry."""
+def coverage(
+    expiry: dt.date, contracts: list[dict], frames: dict[str, pl.DataFrame], index: pl.DataFrame,
+    start: dt.date | None = None,
+):
+    """(per-contract coverage frame, one-row summary frame) for one expiry.
+
+    Expected sessions are the days the index data itself has, so a whole missing day does not lower
+    `coverage`. For comparison the summary also gives `weekdays`, the weekdays in [start, expiry]
+    (holidays included; null without `start`). The `complete` rule does not use it.
+    """
     sessions = index["ts"].dt.date().n_unique()
+    weekdays = None if start is None else sum(
+        (start + dt.timedelta(days=i)).weekday() < 5 for i in range((expiry - start).days + 1)
+    )
     expected = SESSION_MINUTES * sessions
     per = pl.DataFrame(
         [
@@ -205,7 +216,7 @@ def coverage(expiry: dt.date, contracts: list[dict], frames: dict[str, pl.DataFr
     ratio = union / expected if expected else 0.0
     summary = pl.DataFrame([{
         "expiry": expiry, "contracts": len(contracts), "contracts_with_data": int((per["rows"] > 0).sum()),
-        "index_minutes": index.height, "sessions": sessions, "expected_minutes": expected,
+        "index_minutes": index.height, "sessions": sessions, "weekdays": weekdays, "expected_minutes": expected,
         "union_option_minutes": union, "coverage": ratio,
         "complete": expected > 0 and ratio >= COMPLETE_MIN and index.height >= COMPLETE_MIN * expected,
     }])
@@ -254,14 +265,20 @@ def fetch_expiry(
     out.mkdir(parents=True, exist_ok=True)
     write_parquet(opts.sort("ts", "strike", "opt_type"), out / gpdata.options_path(expiry).name)
     write_parquet(index, out / gpdata.index_path(expiry).name)
-    per, summary = coverage(expiry, contracts, frames, index)
+    per, summary = coverage(expiry, contracts, frames, index, start)
     upsert_csv(out / "coverage.csv", per, expiry)
     upsert_csv(out / "coverage_summary.csv", summary, expiry)
     return summary
 
 
 def done(expiry: dt.date, out: Path) -> bool:
-    return (out / gpdata.options_path(expiry).name).exists() and (out / gpdata.index_path(expiry).name).exists()
+    """Both parquets and a coverage_summary.csv row exist (a crash between them refetches the expiry)."""
+    if not ((out / gpdata.options_path(expiry).name).exists() and (out / gpdata.index_path(expiry).name).exists()):
+        return False
+    summary = out / "coverage_summary.csv"
+    if not summary.exists():
+        return False
+    return expiry.isoformat() in pl.read_csv(summary, infer_schema=False)["expiry"].to_list()
 
 
 def read_token(token_file: Path | None) -> str | None:

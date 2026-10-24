@@ -161,12 +161,16 @@ def test_run_writes_gpdata_schema_and_coverage(tmp_path, sleeps):
     assert len(session.calls) == calls + 1  # only the expiries list
     assert fe.run(client, tmp_path, only=[EXPIRY], force=True) == [EXPIRY]
     assert pl.read_csv(tmp_path / "coverage.csv").height == 3  # replaced, not appended
+    assert summary["sessions"] == 3 and summary["weekdays"] >= summary["sessions"]
+
+    (tmp_path / "coverage_summary.csv").unlink()  # parquets written, crash before the logs
+    assert not fe.done(EXPIRY, tmp_path)
 
 
 def test_band_filter_and_incomplete_flag(tmp_path, sleeps):
     client = fe.Client("T", FakeSession(routes(index_minutes=300)), pause=0.0)
     summary = fe.fetch_expiry(client, EXPIRY, tmp_path, band_pct=5.0).row(0, named=True)
-    assert summary["contracts"] == 2  # 26500 is > 5% from the expiry-eve close (~24300)
+    assert summary["contracts"] == 2  # 26500 is > 5% from the expiry-eve close (24599)
     assert summary["complete"] is False  # index has 300 of 375 minutes per session
     assert fe.prior_close(pl.read_parquet(tmp_path / gpdata.index_path(EXPIRY).name), EXPIRY) == 24000.0 + 599
 

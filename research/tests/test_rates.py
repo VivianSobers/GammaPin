@@ -2,6 +2,7 @@ import datetime as dt
 import math
 from pathlib import Path
 
+import polars as pl
 import pytest
 
 import rates
@@ -31,6 +32,13 @@ def test_rate_on_uses_latest_auction_before_day():
     assert rates.rate_on(dt.date(2026, 10, 8), df) == pytest.approx(rates.continuous(5.4))
     with pytest.raises(LookupError):
         rates.rate_on(dt.date(2026, 9, 25), df)
+
+
+def test_rate_on_refuses_a_stale_auction():
+    df = pl.DataFrame({"date": [dt.date(2026, 10, 1)], "r": [0.06]})
+    assert rates.rate_on(dt.date(2026, 10, 22), df) == 0.06  # exactly MAX_AGE old
+    with pytest.raises(LookupError, match="older than 21 days"):
+        rates.rate_on(dt.date(2026, 10, 23), df)
 
 
 def test_iso_dates_blank_rows_and_duplicates(tmp_path):

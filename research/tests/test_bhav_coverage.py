@@ -23,7 +23,7 @@ def test_report():
     assert set(by) == {D(2026, 10, 6), D(2026, 10, 13)}
     assert not by[D(2026, 10, 6)]["expiry_bhavcopy"] and by[D(2026, 10, 13)]["expiry_bhavcopy"]
     assert by[D(2026, 10, 13)]["contracts"] == 3 and by[D(2026, 10, 13)]["contracts_expiry"] == 2
-    # participant OI older than 7 days on the 12 Oct eve; the rate has no age limit
+    # participant OI older than 7 days on the 12 Oct eve; the rate (11 days old) is within rates.MAX_AGE
     assert by[D(2026, 10, 6)]["participant_oi"] and not by[D(2026, 10, 13)]["participant_oi"]
     assert all(r["tbill"] for r in rep["rows"])
     assert rep["gaps"] == [D(2026, 10, 6)] and rep["holidays"] == [D(2026, 10, 9)]

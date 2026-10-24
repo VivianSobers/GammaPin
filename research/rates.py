@@ -33,6 +33,7 @@ import polars as pl
 
 PATH = Path(__file__).resolve().parent / "cache" / "tbill_91d.csv"
 TENOR_DAYS = 91
+MAX_AGE = dt.timedelta(days=21)  # auctions are weekly; the cache has gaps of up to 21 days
 DATE_FORMATS = ("%Y-%m-%d", "%d-%m-%Y", "%d/%m/%Y", "%d-%b-%Y")
 
 
@@ -47,7 +48,9 @@ def parse_dates(col: pl.Series) -> pl.Series:
         out = col.str.strip_chars().str.to_date(fmt, strict=False)
         if out.null_count() == 0:
             return out
-    bad = col.filter(col.str.strip_chars().str.to_date(DATE_FORMATS[0], strict=False).is_null()).head(3).to_list()
+    stripped = pl.col("d").str.strip_chars()
+    fails = pl.all_horizontal([stripped.str.to_date(f, strict=False).is_null() for f in DATE_FORMATS])
+    bad = col.to_frame("d").filter(fails)["d"].head(3).to_list() or col.head(3).to_list()  # else formats are mixed
     raise ValueError(f"unrecognised dates, e.g. {bad}")
 
 
@@ -63,19 +66,22 @@ def load(path: Path = PATH) -> pl.DataFrame:
         "date": parse_dates(raw["date"]),
         "yield_pct": raw["yield_pct"].str.strip_chars().cast(pl.Float64),
     })
-    tau = TENOR_DAYS / 365
     df = df.unique("date", keep="last").sort("date")
-    return df.with_columns(((pl.col("yield_pct") / 100 * tau).log1p() / tau).alias("r"))
+    return df.with_columns(pl.col("yield_pct").map_elements(continuous, return_dtype=pl.Float64).alias("r"))
 
 
 def rate_on(day: dt.date, df: pl.DataFrame) -> float:
     """Continuous decimal rate from the latest auction strictly before `day`.
 
     A same-day auction is excluded: its cut-off may not be public by the 14:00 IST decision.
+    An auction more than MAX_AGE before `day` is refused (LookupError).
     """
     prior = df.filter(pl.col("date") < day)
     if prior.is_empty():
         raise LookupError(f"no 91-day T-bill auction before {day}")
+    latest = prior["date"][-1]
+    if day - latest > MAX_AGE:
+        raise LookupError(f"latest 91-day T-bill auction before {day} is {latest}, older than {MAX_AGE.days} days")
     return float(prior["r"][-1])
 
 
