@@ -2,7 +2,7 @@
 
 Two people, three machines, 14 days, two Nifty expiries. This file is the plan and the tracker. Flip a status in the same commit that finishes the task.
 
-**Legend:** ✅ done · ❌ not done · ➖ dropped · 🚩 checkpoint
+**Legend:** ✅ done · ⏳ in progress · ❌ not done · ➖ dropped · 🚩 checkpoint
 
 ## Scope change (17 Oct 2026): no live capture
 
@@ -111,7 +111,7 @@ From 17 Oct 2026 the live steps above are dropped (see the scope change at the t
 | # | Task | Status |
 |---|---|---|
 | G2.1 | `participant_oi.py`: download and parse NSE participant OI (columns confirmed from a real file) | ✅ |
-| G2.2 | Download 12 months of participant OI | ✅ |
+| G2.2 | Download participant OI, Dec 2024 to Oct 2026 | ✅ |
 | G2.3 | `instruments.py`: Nifty option contracts, lot size, tick size from the Upstox instrument master | ✅ |
 | G2.4 | `fetch_expired.py`: expired option and index candles, ≤ 1 month per request, coverage log | ✅ |
 | G2.5 | ~~Run the expired fetch (needs Plus plan)~~ Replaced by the free NSE bhavcopy: `bhavcopy.py`, Dec 2024 to Oct 2026 downloaded | ✅ |
@@ -140,7 +140,7 @@ From 17 Oct 2026 the live steps above are dropped (see the scope change at the t
 
 | # | Task | Status |
 |---|---|---|
-| G4.1 | Baselines: max pain, nearest multiple of 100, F at 14:00 | ✅ |
+| G4.1 | Baselines: max pain, nearest multiple of 100, F at the decision time (the eve close for H1 end-of-day) | ✅ |
 | G4.2 | Statistics: paired Wilcoxon, block-bootstrap CI (10,000 resamples) | ✅ |
 | G4.3 | H1 pipeline (`h1_pinning.py`) | ✅ |
 | G4.4 | H2 pipeline (`h2_vol.py`): HAR controls, Newey-West (6 lags), out-of-sample R² | ✅ |
@@ -294,7 +294,7 @@ From 17 Oct 2026 the live steps above are dropped (see the scope change at the t
 |---|---|---|---|
 | Data loss when one node fails | 0 frames (60 s network cut) | Vivian | ✅ (0, simulated) |
 | Capture throughput per node | ≥ 50k msg/s sustained | Vivian | ✅ (291k at 782 B) |
-| Full-chain recompute (≤ 1,500 contracts) | < 5 ms on one core | Guru | ✅ (2.4 ms) |
+| Full-chain recompute (≤ 1,500 contracts) | < 5 ms on one core | Guru | ✅ (0.74 ms on the dev machine; an earlier run gave 2.4 ms) |
 | Feed-to-dashboard latency | p99 < 250 ms | Vivian | ✅ (156 ms, mock feed) |
 | Replay speed | ≥ 1M events/s | Vivian | ✅ (11.0M) |
 | Replay determinism | SHA-256 identical across runs | Vivian | ✅ |

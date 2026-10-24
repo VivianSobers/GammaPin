@@ -213,6 +213,7 @@ download them from NSE.
 
 The research question is answered on history; the forward test is live. Track V
 finished every system on the mock feed after the scope change.
+Status marks: ✅ done · ⏳ in progress · ➖ dropped.
 
 | Track | Scope | Status |
 |---|---|:---:|
@@ -230,7 +231,7 @@ finished every system on the mock feed after the scope change.
 |---|---|---|
 | Data loss when one node fails | 0 frames (60 s network cut) | ✅ 0, simulated |
 | Capture throughput per node | ≥ 50k msg/s sustained | ✅ 291k at 782 B |
-| Full-chain recompute (≤ 1,500 contracts) | < 5 ms on one core | ✅ 2.4 ms |
+| Full-chain recompute (≤ 1,500 contracts) | < 5 ms on one core | ✅ 0.74 ms on the dev machine (an earlier run gave 2.4 ms) |
 | Feed-to-dashboard latency | p99 < 250 ms | ✅ 156 ms, mock feed |
 | Replay speed | ≥ 1M events/s | ✅ 11.0M |
 | Replay determinism | SHA-256 identical across runs | ✅ |

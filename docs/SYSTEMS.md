@@ -51,7 +51,7 @@ Measured on a 4-core Intel Xeon at 2.8 GHz with 15 GB RAM (a cloud VM, not the p
 | Replay determinism | SHA-256 identical across runs | **Identical** | CI test plus `gp-replay hash` twice on a dry-run day |
 | Feed-to-dashboard latency | p99 < 250 ms | **p99 156 ms** (staleness p99 145 ms + delivery p99 11 ms) | `gp-monitor` dry-run test over 60 s, below |
 | Merge throughput | (none set) | **143k events/s** in: 1.56M events from two nodes, 143 MB of frames, in 10.9 s | `cargo bench -p gp-merge --bench merge` |
-| Full-chain recompute | < 5 ms | 0.74 ms on this machine | `gp-quant` bench (Track G) |
+| Full-chain recompute | < 5 ms | 0.74 ms on the dev machine (an earlier run gave 2.4 ms) | `gp-quant` bench (Track G) |
 
 ### Latency
 
@@ -92,7 +92,7 @@ The merged Parquet loaded with `research/validate_ticks.py` (`load_events`, `tic
 
 | Item | Why |
 |---|---|
-| Capture of a real session, expiry 1 and expiry 2 (V1.3, V1.5, V1.7, V4.1, V4.3, V7.1, V7.2) | No Upstox account (no KYC) |
+| Capture of a real session, expiry 1 and expiry 2 (V1.3, V1.7, V4.1, V4.3, V7.1, V7.2; `gp-capture` itself, V1.5, is built and tested on the mock feed) | No Upstox account (no KYC) |
 | Upstox login and token sync (`gp auth`, V1.8) | Needs the account; capture already re-reads the token file on each reconnect and logs `TOKEN_RELOAD` |
 | Node setup, chrony, LAN and systemd install (V0.1–V0.3, V1.12) | No capture nodes; units are in `ops/systemd/` |
 | Live chaos test (V4.2 as written) | Simulated on the mock feed instead (above) |
