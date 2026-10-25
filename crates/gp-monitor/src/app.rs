@@ -31,11 +31,14 @@ pub struct RunOpts {
     pub exit_at_end: bool,
 }
 
-/// `GAP_START` times (Unix ms) from a merged day's `coverage.json`, across nodes.
+/// `GAP_START` times (Unix ms) from a merged day's coverage report, across nodes.
 pub fn coverage_gaps(day_dir: &Path) -> anyhow::Result<Vec<i64>> {
-    let path = day_dir.join("coverage.json");
-    let Ok(text) = std::fs::read_to_string(&path) else {
-        return Ok(Vec::new()); // a replay without its report shows no gaps
+    let path = day_dir.join(gp_merge::pipeline::COVERAGE_FILE);
+    let text = match std::fs::read_to_string(&path) {
+        Ok(t) => t,
+        // a replay without its report shows no gaps
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(e) => anyhow::bail!("{}: {e}", path.display()),
     };
     let v: serde_json::Value =
         serde_json::from_str(&text).map_err(|e| anyhow::anyhow!("{}: {e}", path.display()))?;
@@ -124,7 +127,11 @@ pub async fn run(
         _ = until_true(stop.clone()) => None,
         r = &mut done_rx => Some(r),
     };
-    if finished.is_some() && !opts.exit_at_end {
+    let failed = matches!(finished, Some(Ok(Err(_))) | Some(Err(_)));
+    if let Some(Ok(Err(e))) = &finished {
+        tracing::error!("engine stopped: {e:#}");
+    }
+    if finished.is_some() && !failed && !opts.exit_at_end {
         until_true(stop).await; // keep showing the last snapshot
     }
     halt.store(true, Ordering::Relaxed);
@@ -164,7 +171,7 @@ mod tests {
         gp_replay::write_replay(&day.join(gp_merge::pipeline::REPLAY_FILE), &evs).unwrap();
         let gap_ns = evs[0].ltt_ms * 1_000_000;
         std::fs::write(
-            day.join("coverage.json"),
+            day.join(gp_merge::pipeline::COVERAGE_FILE),
             format!(r#"{{"nodes":[{{"gaps":[{{"start_ns":{gap_ns}}}]}},{{"gaps":[]}}]}}"#),
         )
         .unwrap();
@@ -214,7 +221,12 @@ mod tests {
     fn missing_coverage_means_no_gaps() {
         let dir = tempfile::tempdir().unwrap();
         assert!(coverage_gaps(dir.path()).unwrap().is_empty());
-        std::fs::write(dir.path().join("coverage.json"), "not json").unwrap();
+        let path = dir.path().join(gp_merge::pipeline::COVERAGE_FILE);
+        std::fs::write(&path, "not json").unwrap();
+        assert!(coverage_gaps(dir.path()).is_err());
+        // unreadable is an error too, not an empty report
+        std::fs::remove_file(&path).unwrap();
+        std::fs::create_dir(&path).unwrap();
         assert!(coverage_gaps(dir.path()).is_err());
     }
 }

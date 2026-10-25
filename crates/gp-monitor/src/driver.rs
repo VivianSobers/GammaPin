@@ -53,6 +53,7 @@ impl Driver<'_> {
         let source = stream.source();
         let mut sum = Summary::default();
         let mut next = (self.clock)();
+        let mut last_err: Option<String> = None;
         let mut snap = |stream: &dyn EventStream, engine: &mut Engine, sum: &mut Summary| {
             let now = (self.clock)();
             let ts = match source {
@@ -67,9 +68,20 @@ impl Driver<'_> {
                     {
                         sum.staleness.record((now - ltt) as f64);
                     }
+                    if last_err.take().is_some() {
+                        tracing::info!("snapshots resumed");
+                    }
                     publish(s);
                 }
-                Err(_) => sum.skipped += 1,
+                Err(e) => {
+                    sum.skipped += 1;
+                    // once per change of reason, not once per period
+                    let why = e.to_string();
+                    if last_err.as_deref() != Some(why.as_str()) {
+                        tracing::warn!("no snapshot: {why}");
+                        last_err = Some(why);
+                    }
+                }
             }
         };
         loop {
@@ -186,7 +198,8 @@ mod tests {
         let date = Date::from_ymd(2026, 10, 19);
         let evs = market_events(date, 10);
         let clock = ManualClock::default();
-        // 1×: the second frame is due 250 ms after the first and the clock never moves
+        // 1×: an event is due once the clock has moved as far past the first event as its
+        // ltt_ms has; this clock never moves
         let mut stream = Paced::new(
             VecStream::new(evs, Source::Replay),
             Speed::parse("1x").unwrap(),
@@ -208,7 +221,7 @@ mod tests {
             stop: &stop,
         };
         let sum = drv.run(&mut stream, &mut engine, &mut |_| {}).unwrap();
-        // only the first frame's events were released
+        // only the events with the first event's ltt_ms were released
         assert!(sum.events > 0 && sum.events < 100, "{sum:?}");
         assert!(stop.load(Ordering::Relaxed));
     }

@@ -35,7 +35,9 @@ async fn ws(upgrade: WebSocketUpgrade, State(st): State<AppState>) -> Response {
     upgrade.on_upgrade(move |socket| push(socket, st.latest))
 }
 
-/// Send the current snapshot, then each new one, until the client goes away.
+/// Send the current snapshot, then each new one, until the client goes away. When the
+/// engine stops, the socket stays open on its last snapshot instead of closing, which
+/// would only make the page reconnect in a loop.
 async fn push(socket: WebSocket, mut latest: Latest) {
     let (mut tx, mut rx) = socket.split();
     let current = latest.borrow_and_update().clone();
@@ -44,11 +46,13 @@ async fn push(socket: WebSocket, mut latest: Latest) {
     {
         return;
     }
+    let mut engine_up = true;
     loop {
         tokio::select! {
-            changed = latest.changed() => {
+            changed = latest.changed(), if engine_up => {
                 if changed.is_err() {
-                    break; // engine stopped
+                    engine_up = false; // engine stopped: wait for the client alone
+                    continue;
                 }
                 let next = latest.borrow_and_update().clone();
                 if let Some(s) = next
@@ -132,6 +136,19 @@ mod tests {
         let second = ws.next().await.unwrap().unwrap();
         assert_eq!(second, WsMessage::Text(r#"{"n":2}"#.into()));
         ws.close(None).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn socket_stays_open_after_the_engine_stops() {
+        let (addr, tx) = start().await;
+        tx.send_replace(Some(Arc::from("{}")));
+        let (mut ws, _) = tokio_tungstenite::connect_async(format!("ws://{addr}/ws"))
+            .await
+            .unwrap();
+        ws.next().await.unwrap().unwrap();
+        drop(tx);
+        let next = tokio::time::timeout(std::time::Duration::from_millis(200), ws.next()).await;
+        assert!(next.is_err(), "socket closed: {next:?}");
     }
 
     #[tokio::test]
