@@ -115,9 +115,12 @@
     return (loc.protocol === 'https:' ? 'wss://' : 'ws://') + loc.host + '/ws';
   }
 
-  /** True when the query string asks for mock mode (?mock, ?mock=1, &mock). */
+  /** True when the query string asks for mock mode (?mock, ?mock=1, &mock); ?mock=0 and ?mock=false do not. */
   function isMockRequested(search) {
-    return /(^|[?&])mock(=[^&]*)?($|&)/.test(search || '');
+    var m = /(?:^|[?&])mock(?:=([^&]*))?(?:$|&)/.exec(search || '');
+    if (!m) return false;
+    var v = (m[1] || '').toLowerCase();
+    return v !== '0' && v !== 'false';
   }
 
   function clone(x) { return JSON.parse(JSON.stringify(x)); }
@@ -159,8 +162,9 @@
   /**
    * Start the feed. opts:
    *   onSnapshot(snapshot, meta)  meta = { origin: 'ws' | 'mock', receivedAt }
-   *   onStatus(status)            status = { mode, wsState, retryInMs, rejected, lastError, mockReason }
-   *   location (default window.location), fetchMock (default fetch of mock/snapshot.json)
+   *   onStatus(status)            status = { mode, wsState, retryInMs, retryAt, rejected, lastError, mockReason }
+   *                               (retryAt: epoch ms of the next reconnect; lastError clears on the next accepted snapshot)
+   *   location (default window.location)
    */
   function start(opts) {
     var loc = opts.location || window.location;
@@ -173,6 +177,7 @@
       mockReason: forcedMock ? '?mock in URL' : null,
       wsState: forcedMock ? 'disabled' : 'connecting', // connecting | open | closed | disabled | unsupported
       retryInMs: null,
+      retryAt: null,
       rejected: 0,
       lastError: null
     };
@@ -209,6 +214,7 @@
     function connect() {
       retryTimer = null;
       status.retryInMs = null;
+      status.retryAt = null;
       status.wsState = 'connecting';
       emitStatus();
       try {
@@ -232,11 +238,12 @@
           return;
         }
         attempt = 0; // healthy stream resets the backoff
-        if (!gotWsSnapshot || status.mode !== 'ws') {
+        if (!gotWsSnapshot || status.mode !== 'ws' || status.lastError) {
           gotWsSnapshot = true;
           stopMock();
           status.mode = 'ws';
           status.mockReason = null;
+          status.lastError = null; // a valid snapshot supersedes the last error
           emitStatus();
         }
         onSnapshot(r.snapshot, { origin: 'ws', receivedAt: Date.now() });

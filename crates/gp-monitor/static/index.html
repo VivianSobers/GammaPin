@@ -121,10 +121,7 @@
       var dash = GPPanels.createDashboard(document, window.uPlot || null);
 
       GPFeed.start({
-        onSnapshot: function (snap, meta) {
-          try { dash.render(snap, meta); }
-          catch (err) { console.error('render failed', err); var e = document.getElementById('st-error'); if (e) e.textContent = 'render error: ' + err.message; }
-        },
+        onSnapshot: dash.render,
         onStatus: dash.renderStatus
       });
       setInterval(dash.tick, 250);

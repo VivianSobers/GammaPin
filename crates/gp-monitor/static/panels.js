@@ -529,7 +529,7 @@
   function createDashboard(doc, uPlot) {
     function $(id) { return doc.getElementById(id); }
     var chart = new GexChart(doc, uPlot, $('gex-chart'), $('gex-legend'), $('gex-markers'));
-    var last = { snap: null, meta: null, status: null };
+    var last = { snap: null, meta: null, status: null, renderError: null };
 
     function setText(id, t) { var e = $(id); if (e) e.textContent = t; }
 
@@ -619,11 +619,18 @@
     function render(snap, meta) {
       last.snap = snap;
       last.meta = meta || {};
-      var vm = buildViewModel(snap);
-      renderHeader(vm);
-      renderTable(vm);
-      renderHealth(vm);
-      chart.update(vm.chart);
+      try {
+        var vm = buildViewModel(snap);
+        renderHeader(vm);
+        renderTable(vm);
+        renderHealth(vm);
+        chart.update(vm.chart);
+        last.renderError = null;
+      } catch (err) {
+        // kept until a render succeeds, so tick() shows it instead of the feed status
+        last.renderError = 'render error: ' + err.message;
+        console.error('render failed', err);
+      }
       tick();
     }
 
@@ -656,7 +663,7 @@
       var wsEl = $('st-ws');
       wsEl.textContent = wsText;
       wsEl.className = 'ws-state ' + ws;
-      setText('st-error', st.lastError || '');
+      setText('st-error', last.renderError || st.lastError || '');
     }
 
     /** Rebuild the chart with the current theme's colours. */

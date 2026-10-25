@@ -68,23 +68,23 @@
   ],
   "h1_accuracy": {
     "S0": {
-      "mae": 61.2,
-      "n": 18
+      "mae": 201.6,
+      "n": 66
     },
     "S1": {
-      "mae": 54.8,
-      "n": 18
+      "mae": 165.2,
+      "n": 65
     }
   },
   "health": {
-    "lag_ms_p50": 38,
-    "lag_ms_p99": 141,
+    "lag_ms_p50": 650,
+    "lag_ms_p99": 1200,
     "gaps_today": 1,
     "nodes": {
       "A": "up",
       "B": "up"
     },
     "quotes_used": 12,
-    "quotes_total": 13
+    "quotes_total": 26
   }
 }
