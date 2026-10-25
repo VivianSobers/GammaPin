@@ -257,9 +257,9 @@ async fn chaos(cuts: usize, outage: Duration, healthy: Duration) {
         assert_eq!(s.gaps as usize, expected, "node {i}: {s:?}");
         assert_eq!(cov.nodes[i].gaps.len(), expected);
     }
-    assert!(cov.dedup.only_b > 0 && cov.dedup.both > 0);
+    assert!(cov.dedup.only[1] > 0 && cov.dedup.shared > 0);
     if cuts > 1 {
-        assert!(cov.dedup.only_a > 0);
+        assert!(cov.dedup.only[0] > 0);
     }
 
     // Each cut cost its node frames, but between them the two logs miss nothing.

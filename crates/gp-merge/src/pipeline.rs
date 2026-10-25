@@ -36,7 +36,7 @@ pub fn merge_day(cfg: &Merge, date: Date, master: &Master) -> anyhow::Result<Cov
         "no node has a log for {date} under {}",
         cfg.inbox.display()
     );
-    let (mut events, dedup_stats) = dedup(all);
+    let (mut events, dedup_stats) = dedup(all, cfg.nodes.len());
     sort_for_replay(&mut events);
 
     let final_dir = cfg.day_dir(date);
@@ -175,9 +175,8 @@ pub(crate) mod tests {
 
         // Every frame was captured by at least one node: 300 frames × 40 updates.
         assert_eq!(cov.dedup.output, 300 * 40);
-        assert_eq!(cov.dedup.only_b, 70 * 40);
-        assert_eq!(cov.dedup.only_a, 30 * 40);
-        assert_eq!(cov.dedup.both, 200 * 40);
+        assert_eq!(cov.dedup.only, [30 * 40, 70 * 40]);
+        assert_eq!(cov.dedup.shared, 200 * 40);
         assert!(cov.lost.is_empty());
         assert_eq!(cov.nodes[0].gaps.len(), 1);
         assert_eq!(cov.replay_events, 300 * 40);
@@ -208,7 +207,7 @@ pub(crate) mod tests {
         let second = merge_day(&c, date, &master).unwrap();
         assert_eq!(first.dedup.output, second.dedup.output);
         assert!(!second.nodes[1].present);
-        assert_eq!(second.dedup.only_a, second.dedup.output);
+        assert_eq!(second.dedup.only[0], second.dedup.output);
         assert!(!c.out.join(format!("date={date}.tmp")).exists());
 
         std::fs::remove_dir_all(c.node_dir("A", date)).unwrap();

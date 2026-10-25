@@ -6,11 +6,12 @@ use serde::Deserialize;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct Config {
+    #[serde(default)]
     pub merge: Merge,
 }
 
 #[derive(Debug, Clone, Deserialize)]
-#[serde(default)]
+#[serde(default, deny_unknown_fields)]
 pub struct Merge {
     /// Capture nodes, in `src_mask` bit order: the first is bit 0.
     pub nodes: Vec<String>,
@@ -20,7 +21,8 @@ pub struct Merge {
     pub out: PathBuf,
     /// The instrument master used during capture (`.json` or `.json.gz`).
     pub master_path: PathBuf,
-    /// The feed's OI is in index units and is divided by the lot size.
+    /// Treat the feed's OI as units and divide it by the lot size. Unverified for the live
+    /// feed (see PREREGISTRATION.md): set it once a live day has been checked.
     pub oi_in_units: bool,
     /// Compress each node's segments to `.gpl.zst` after a successful merge.
     pub compress: bool,
@@ -74,5 +76,20 @@ mod tests {
         );
         assert_eq!(m.day_dir(d), PathBuf::from("data/merged/date=2026-10-19"));
         assert!(m.oi_in_units && m.compress);
+    }
+
+    #[test]
+    fn unknown_merge_keys_are_rejected() {
+        assert!(
+            toml::from_str::<Config>(
+                "[merge]
+node = [\"A\"]"
+            )
+            .is_err()
+        );
+        assert_eq!(
+            toml::from_str::<Config>("").unwrap().merge.nodes,
+            ["A", "B"]
+        );
     }
 }

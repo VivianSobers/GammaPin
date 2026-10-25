@@ -186,10 +186,16 @@ impl Coverage {
             .unwrap();
         }
         let d = &self.dedup;
+        let only: String = self
+            .nodes
+            .iter()
+            .zip(&d.only)
+            .map(|(n, k)| format!(", {k} only {}", n.node))
+            .collect();
         writeln!(
             s,
-            "\nEvents: {} in, {} out ({} on both nodes, {} only A, {} only B). {} Parquet files, {} replay events.",
-            d.input, d.output, d.both, d.only_a, d.only_b, self.partitions.files, self.replay_events
+            "\nEvents: {} in, {} out ({} on several nodes{only}). {} Parquet files, {} replay events.",
+            d.input, d.output, d.shared, self.partitions.files, self.replay_events
         )
         .unwrap();
         if self.lost.is_empty() {
