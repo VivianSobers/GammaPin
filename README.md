@@ -2,12 +2,16 @@
 
 **As far as we found, the first open, pre-registered test of whether gamma exposure predicts Nifty expiry-day moves — on free public data.**
 
-[![CI](https://img.shields.io/badge/CI-rust_+_python-2ea44f?logo=githubactions&logoColor=white)](.github/workflows/ci.yml)
-[![Rust](https://img.shields.io/badge/Rust-2024_edition-000000?logo=rust&logoColor=white)](Cargo.toml)
-[![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)](research/requirements.txt)
-[![Pre-registered](https://img.shields.io/badge/pre--registered-prereg--v1-8A2BE2)](PREREGISTRATION.md)
-[![H1](https://img.shields.io/badge/H1-not_supported-lightgrey)](docs/RESULTS.md)
-[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![Study](https://img.shields.io/badge/Study-Pre--registered%20%C2%B7%20prereg--v1-6A1B9A?style=for-the-badge&labelColor=AB47BC)](PREREGISTRATION.md)
+[![H1](https://img.shields.io/badge/H1%20Gamma%20Pinning-Not%20Supported%20%C2%B7%2094%20Expiries-B71C1C?style=for-the-badge&labelColor=EF5350)](docs/RESULTS.md)
+[![Data](https://img.shields.io/badge/Data-NSE%20%2B%20RBI%20Public%20Files-1565C0?style=for-the-badge&labelColor=42A5F5)](#data)
+[![Pricing](https://img.shields.io/badge/Pricing-Black--76%20%C2%B7%20IV%20%C2%B7%20GEX-E65100?style=for-the-badge&labelColor=FF9800)](crates/gp-quant)
+[![Capture](https://img.shields.io/badge/Capture-Upstox%20V3%20%C2%B7%20Mock%20Feed-2E7D32?style=for-the-badge&labelColor=66BB6A)](docs/SYSTEMS.md)
+[![Replay](https://img.shields.io/badge/Replay-11.0M%20events%2Fs-00897B?style=for-the-badge&labelColor=26A69A)](crates/gp-replay)
+[![Rust](https://img.shields.io/badge/Language-Rust%202024-1C1C1C?style=for-the-badge&logo=rust&logoColor=FFFFFF&labelColor=424242)](Cargo.toml)
+[![Python](https://img.shields.io/badge/Language-Python%203.12-1C1C1C?style=for-the-badge&logo=python&logoColor=FFD700&labelColor=424242)](research/requirements.txt)
+[![CI](https://img.shields.io/badge/CI-Rust%20%2B%20Python-512DA8?style=for-the-badge&logo=githubactions&logoColor=FFFFFF&labelColor=9575CD)](.github/workflows/ci.yml)
+[![License](https://img.shields.io/badge/License-MIT-B8860B?style=for-the-badge&labelColor=FFD54F)](LICENSE)
 
 Much of Indian index-options trading is in contracts close to expiry, and
 traders rely on GEX charts whose claims nobody has tested. GammaPin fixes its
