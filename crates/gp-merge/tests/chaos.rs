@@ -2,7 +2,7 @@
 //! Cut one node's path at a time; after the merge the union of both logs must hold every
 //! frame the feed sent, with no window lost.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashSet};
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -184,6 +184,24 @@ fn frame_times(m: &Merge, node: &str, date: Date) -> BTreeSet<i64> {
         .collect()
 }
 
+/// Distinct known-instrument updates over both nodes' logs: what the merge must output.
+fn distinct_updates(m: &Merge, date: Date, master: &Master) -> u64 {
+    let mut seen = HashSet::new();
+    for node in ["A", "B"] {
+        for (_, p) in read_node(&m.node_dir(node, date), node, 0).unwrap().frames {
+            let Ok(f) = FeedResponse::decode(&p[..]) else {
+                continue;
+            };
+            for u in gp_feed::updates(&f) {
+                if master.get(&u.instrument_key).is_some() {
+                    seen.insert(format!("{u:?}"));
+                }
+            }
+        }
+    }
+    seen.len() as u64
+}
+
 /// Run both nodes for `cuts` alternating outages (A, B, A, …) of `outage` each, separated by
 /// `healthy` stretches, then merge and check the union.
 async fn chaos(cuts: usize, outage: Duration, healthy: Duration) {
@@ -251,7 +269,7 @@ async fn chaos(cuts: usize, outage: Duration, healthy: Duration) {
         cov.lost,
         cov.nodes.iter().map(|n| &n.gaps).collect::<Vec<_>>()
     );
-    assert_eq!(cov.replay_events, cov.dedup.output);
+    assert_eq!(cov.dedup.output, distinct_updates(&m, date, &master));
     for (i, s) in summaries.iter().enumerate() {
         let expected = cuts / 2 + (cuts % 2 > i) as usize;
         assert_eq!(s.gaps as usize, expected, "node {i}: {s:?}");

@@ -32,12 +32,16 @@ fn parse_date(s: &str) -> anyhow::Result<Date> {
     Date::parse(s).ok_or_else(|| anyhow::anyhow!("bad --date {s:?}, want YYYY-MM-DD or today"))
 }
 
-fn run(args: &Args) -> anyhow::Result<bool> {
+/// Above this share of updates with keys missing from the master, the master is probably
+/// not the one the day was captured with.
+const MAX_UNKNOWN_SHARE: f64 = 0.01;
+
+fn run(args: &Args) -> anyhow::Result<u8> {
     let cfg = Config::load(&args.config)?.merge;
     let date = parse_date(&args.date)?;
+    let master_path = cfg.master_for(date);
     let master = Master::new(
-        read_master(&cfg.master_path)
-            .map_err(|e| anyhow::anyhow!("{}: {e}", cfg.master_path.display()))?,
+        read_master(&master_path).map_err(|e| anyhow::anyhow!("{}: {e}", master_path.display()))?,
     );
     let cov = merge_day(&cfg, date, &master)?;
     if args.json {
@@ -45,15 +49,27 @@ fn run(args: &Args) -> anyhow::Result<bool> {
     } else {
         print!("{}", cov.markdown());
     }
-    Ok(cov.lost.is_empty())
+    let updates: u64 = cov.nodes.iter().map(|n| n.decode.updates).sum();
+    let unknown: u64 = cov
+        .nodes
+        .iter()
+        .map(|n| n.decode.unknown_keys.values().sum::<u64>())
+        .sum();
+    if updates > 0 && unknown as f64 > MAX_UNKNOWN_SHARE * updates as f64 {
+        eprintln!(
+            "gp-merge: {unknown} of {updates} updates have keys missing from {}; is it the master for {date}?",
+            master_path.display()
+        );
+        return Ok(4);
+    }
+    // Merged, but some window was missed by every node: exit 3 so a timer can alert.
+    Ok(if cov.lost.is_empty() { 0 } else { 3 })
 }
 
 fn main() -> ExitCode {
     let args = Args::parse();
     match run(&args) {
-        Ok(true) => ExitCode::SUCCESS,
-        // Merged, but some window was missed by every node: exit 3 so a timer can alert.
-        Ok(false) => ExitCode::from(3),
+        Ok(code) => ExitCode::from(code),
         Err(e) => {
             eprintln!("gp-merge: {e:#}");
             ExitCode::FAILURE

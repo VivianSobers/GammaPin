@@ -17,7 +17,8 @@ use crate::read::NodeLog;
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct GapReport {
     pub start_ns: i64,
-    /// Equal to the node's last record time when the log ended inside the gap.
+    /// When the log ended inside the gap: the node's last frame time, or the gap's start if
+    /// no frame came after it.
     pub end_ns: i64,
     pub open_at_end: bool,
     pub reason: String,
@@ -48,7 +49,6 @@ pub struct Coverage {
     pub nodes: Vec<NodeReport>,
     pub dedup: DedupStats,
     pub partitions: PartitionStats,
-    pub replay_events: u64,
     /// Windows (ns) where every present node was uncovered: data that no node captured.
     pub lost: Vec<(i64, i64)>,
 }
@@ -150,7 +150,7 @@ pub fn lost_windows(nodes: &[NodeReport], session: (i64, i64)) -> Vec<(i64, i64)
     acc
 }
 
-fn ms(ns: i64) -> String {
+fn ist_clock(ns: i64) -> String {
     let m = gp_feed::date::ist_minute_of_day(ns / 1_000_000);
     format!(
         "{:02}:{:02}:{:06.3}",
@@ -194,8 +194,8 @@ impl Coverage {
             .collect();
         writeln!(
             s,
-            "\nEvents: {} in, {} out ({} on several nodes{only}). {} Parquet files, {} replay events.",
-            d.input, d.output, d.shared, self.partitions.files, self.replay_events
+            "\nEvents: {} in, {} out ({} on several nodes{only}). {} Parquet files.",
+            d.input, d.output, d.shared, self.partitions.files
         )
         .unwrap();
         if self.lost.is_empty() {
@@ -203,7 +203,7 @@ impl Coverage {
         } else {
             s += "\n**Lost windows (every node uncovered), IST:**\n\n";
             for (a, b) in &self.lost {
-                writeln!(s, "- {} – {}", ms(*a), ms(*b)).unwrap();
+                writeln!(s, "- {} – {}", ist_clock(*a), ist_clock(*b)).unwrap();
             }
         }
         for n in self.nodes.iter().filter(|n| !n.gaps.is_empty()) {
@@ -212,8 +212,8 @@ impl Coverage {
                 writeln!(
                     s,
                     "- {} – {} ({:.1} s{}): {}",
-                    ms(g.start_ns),
-                    ms(g.end_ns),
+                    ist_clock(g.start_ns),
+                    ist_clock(g.end_ns),
                     (g.end_ns - g.start_ns) as f64 / 1e9,
                     if g.open_at_end { ", open at end" } else { "" },
                     g.reason
@@ -304,7 +304,6 @@ mod tests {
             nodes: vec![a, b],
             dedup: DedupStats::default(),
             partitions: PartitionStats::default(),
-            replay_events: 0,
             lost,
         };
         let md = c.markdown();
@@ -322,7 +321,6 @@ mod tests {
             nodes: vec![a],
             dedup: DedupStats::default(),
             partitions: PartitionStats::default(),
-            replay_events: 0,
             lost: vec![],
         };
         assert!(!c.markdown().contains("-0.0"));

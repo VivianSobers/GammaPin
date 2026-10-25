@@ -17,6 +17,7 @@ use crate::parquet::write_partitions;
 use crate::read::read_node;
 
 pub const REPLAY_FILE: &str = "replay.gpr";
+pub const COVERAGE_FILE: &str = "coverage.json";
 
 pub fn merge_day(cfg: &Merge, date: Date, master: &Master) -> anyhow::Result<Coverage> {
     anyhow::ensure!(cfg.nodes.len() <= 8, "src_mask has room for 8 nodes");
@@ -53,17 +54,20 @@ pub fn merge_day(cfg: &Merge, date: Date, master: &Master) -> anyhow::Result<Cov
         nodes: reports,
         dedup: dedup_stats,
         partitions,
-        replay_events: events.len() as u64,
     };
     std::fs::write(
-        tmp.join("coverage.json"),
+        tmp.join(COVERAGE_FILE),
         serde_json::to_vec_pretty(&coverage)?,
     )?;
     std::fs::write(tmp.join("coverage.md"), coverage.markdown())?;
     replace_dir(&tmp, &final_dir)?;
     if cfg.compress {
+        // the day is merged by now: a failure here must not hide its coverage or exit code
         for node in &cfg.nodes {
-            compress_node(&cfg.node_dir(node, date))?;
+            let dir = cfg.node_dir(node, date);
+            if let Err(e) = compress_node(&dir) {
+                eprintln!("gp-merge: compressing {}: {e:#}", dir.display());
+            }
         }
     }
     Ok(coverage)
@@ -103,7 +107,7 @@ fn replace_dir(from: &Path, to: &Path) -> std::io::Result<()> {
 }
 
 #[cfg(test)]
-pub(crate) mod tests {
+mod tests {
     use super::*;
     use gp_feed::synth::{Market, MarketConfig, universe};
     use gp_log::{RecordKind, Writer, WriterConfig};
@@ -111,7 +115,7 @@ pub(crate) mod tests {
     use prost::Message;
 
     /// Two node logs from one synthetic market: B misses frames `b_gap`, A misses `a_gap`.
-    pub fn two_nodes(
+    fn two_nodes(
         inbox: &Path,
         date: Date,
         frames: usize,
@@ -179,7 +183,6 @@ pub(crate) mod tests {
         assert_eq!(cov.dedup.shared, 200 * 40);
         assert!(cov.lost.is_empty());
         assert_eq!(cov.nodes[0].gaps.len(), 1);
-        assert_eq!(cov.replay_events, 300 * 40);
 
         let day = c.day_dir(date);
         let replay = ReplayFile::open(&day.join(REPLAY_FILE)).unwrap();

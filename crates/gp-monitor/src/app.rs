@@ -65,8 +65,9 @@ fn stream(cfg: &Config, mode: Mode, engine: &mut Engine) -> anyhow::Result<Box<d
             Box::new(Paced::new(inner, speed, Box::new(SystemClock::default())))
         }
         Mode::Live { date } => {
-            let master = read_master(&m.master_path)
-                .map_err(|e| anyhow::anyhow!("{}: {e}", m.master_path.display()))?;
+            let path = m.master_for(date);
+            let master =
+                read_master(&path).map_err(|e| anyhow::anyhow!("{}: {e}", path.display()))?;
             let dirs = m.nodes.iter().map(|n| m.node_dir(n, date)).collect();
             Box::new(LiveStream::new(
                 dirs,

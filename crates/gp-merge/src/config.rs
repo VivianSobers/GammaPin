@@ -19,7 +19,8 @@ pub struct Merge {
     pub inbox: PathBuf,
     /// C1 output root: `{out}/date=YYYY-MM-DD/…`.
     pub out: PathBuf,
-    /// The instrument master used during capture (`.json` or `.json.gz`).
+    /// The instrument master used during capture (`.json` or `.json.gz`). A `{date}` in the
+    /// path is replaced by the day being merged, so old days can keep their own master.
     pub master_path: PathBuf,
     /// Treat the feed's OI as units and divide it by the lot size. Unverified for the live
     /// feed (see PREREGISTRATION.md): set it once a live day has been checked.
@@ -54,6 +55,16 @@ impl Merge {
         self.inbox.join(node).join(date.to_string())
     }
 
+    /// The master for `date`: `master_path` with `{date}` replaced.
+    pub fn master_for(&self, date: gp_feed::Date) -> PathBuf {
+        let p = self.master_path.to_string_lossy();
+        if p.contains("{date}") {
+            p.replace("{date}", &date.to_string()).into()
+        } else {
+            self.master_path.clone()
+        }
+    }
+
     pub fn day_dir(&self, date: gp_feed::Date) -> PathBuf {
         self.out.join(format!("date={date}"))
     }
@@ -76,6 +87,15 @@ mod tests {
         );
         assert_eq!(m.day_dir(d), PathBuf::from("data/merged/date=2026-10-19"));
         assert!(m.oi_in_units && m.compress);
+        assert_eq!(m.master_for(d), PathBuf::from("data/NSE.json.gz"));
+        let dated = Merge {
+            master_path: "data/master/{date}.json.gz".into(),
+            ..m
+        };
+        assert_eq!(
+            dated.master_for(d),
+            PathBuf::from("data/master/2026-10-19.json.gz")
+        );
     }
 
     #[test]

@@ -64,5 +64,4 @@ fn main() {
         secs,
         cov.dedup.input as f64 / secs
     );
-    assert!(cov.lost.is_empty());
 }

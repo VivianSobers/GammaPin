@@ -24,7 +24,7 @@ master_path = "data/NSE.json.gz"   # cached instrument master
 nodes = ["A", "B"]              # src_mask bit 0, bit 1
 inbox = "/srv/gammapin/inbox"   # Node A/B segments land here (rsync over LAN): {inbox}/{node}/{date}/
 out = "data/merged"             # C1 Parquet, replay.gpr and coverage under {out}/date=YYYY-MM-DD/
-master_path = "data/NSE.json.gz"
+master_path = "data/NSE.json.gz"   # {date} in the path is replaced by the merged day
 oi_in_units = true              # feed OI in units, divided by the lot size (unverified, see PREREGISTRATION.md)
 compress = true                 # zstd the node segments after a successful merge
 

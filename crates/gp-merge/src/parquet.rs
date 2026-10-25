@@ -117,7 +117,8 @@ pub fn batch(rows: &[&Event]) -> RecordBatch {
     RecordBatch::try_new(schema(), cols).expect("columns match the C1 schema")
 }
 
-/// `instrument=` directory name for a key.
+/// `instrument=` directory name for a key. Not injective (`|` and `_` both map to `_`), so
+/// [`write_partitions`] refuses two keys with the same name.
 pub fn partition_name(instrument_key: &str) -> String {
     format!("instrument={}", instrument_key.replace('|', "_"))
 }
@@ -138,9 +139,14 @@ pub fn write_partitions(day_dir: &Path, events: &[Event]) -> anyhow::Result<Part
         .set_compression(Compression::ZSTD(ZstdLevel::try_new(3)?))
         .build();
     let mut stats = PartitionStats::default();
+    let mut names = std::collections::HashMap::new();
     for (key, mut rows) in by_key {
         rows.sort_by_key(|e| (e.ltt_ms, e.recv_ns));
-        let dir = day_dir.join(partition_name(key));
+        let name = partition_name(key);
+        if let Some(other) = names.insert(name.clone(), key) {
+            anyhow::bail!("{other:?} and {key:?} share the partition {name}");
+        }
+        let dir = day_dir.join(name);
         std::fs::create_dir_all(&dir)?;
         let file = std::fs::File::create(dir.join("part-0.parquet"))?;
         let mut w = ArrowWriter::try_new(file, schema(), Some(props.clone()))?;
@@ -180,6 +186,16 @@ mod tests {
             ask_qty: [65, 65, 0, 0, 0],
             src_mask: 3,
         }
+    }
+
+    #[test]
+    fn colliding_partition_names_are_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        let events = vec![
+            ev("NSE_FO|7", Kind::Pe, 1, 1),
+            ev("NSE_FO_7", Kind::Pe, 1, 1),
+        ];
+        assert!(write_partitions(dir.path(), &events).is_err());
     }
 
     #[test]
