@@ -10,7 +10,7 @@ use gp_feed::{Date, Master, Normalizer};
 use gp_replay::{sort_for_replay, write_replay};
 
 use crate::config::Merge;
-use crate::coverage::{Coverage, lost_windows, node_report};
+use crate::coverage::{Coverage, lost_windows, node_report, session_ns};
 use crate::dedup::dedup;
 use crate::normalize::node_events;
 use crate::parquet::write_partitions;
@@ -49,7 +49,7 @@ pub fn merge_day(cfg: &Merge, date: Date, master: &Master) -> anyhow::Result<Cov
     write_replay(&tmp.join(REPLAY_FILE), &events)?;
     let coverage = Coverage {
         date: date.to_string(),
-        lost: lost_windows(&reports),
+        lost: lost_windows(&reports, session_ns(date)),
         nodes: reports,
         dedup: dedup_stats,
         partitions,

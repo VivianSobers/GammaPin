@@ -45,7 +45,7 @@ pub const ZSTD_LEVEL: i32 = 3;
 /// Whether a scan stopping at `reason` looks like a torn write (a crash mid-record) rather
 /// than a record this version cannot read. Recovery truncates torn tails; readers treat
 /// them as the end of the data.
-pub(crate) fn is_torn(reason: Invalid) -> bool {
+pub fn is_torn(reason: Invalid) -> bool {
     !matches!(reason, Invalid::UnknownKind(_))
 }
 

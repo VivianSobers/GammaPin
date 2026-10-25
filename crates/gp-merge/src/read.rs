@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use gp_log::{LogError, RecordKind, list_segments, read_segment};
+use gp_log::{LogError, RecordKind, is_torn, list_segments, scan, segment_bytes};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Gap {
@@ -25,6 +25,8 @@ pub struct NodeLog {
     pub gaps: Vec<Gap>,
     pub subscribes: usize,
     pub token_reloads: usize,
+    /// Bytes of a torn tail dropped from the last segment.
+    pub torn_bytes: u64,
 }
 
 impl NodeLog {
@@ -42,8 +44,12 @@ impl NodeLog {
     }
 }
 
-/// Read every segment of `dir`. Each must be clean: capture recovers torn tails on restart,
-/// so a torn segment here means the copy to the inbox is incomplete.
+/// Read every segment of `dir`. Earlier segments must be clean, since capture recovers torn
+/// tails on restart. The last one may end in a torn record (capture was killed and not
+/// restarted): its valid prefix is kept and the torn bytes are counted.
+///
+/// A gap still open when capture stopped is closed by the first market-data frame after it,
+/// because a restarted capture starts without an open gap and never writes its `GAP_END`.
 pub fn read_node(dir: &Path, node: &str, bit: u8) -> Result<NodeLog, LogError> {
     let mut log = NodeLog {
         node: node.to_string(),
@@ -55,11 +61,31 @@ pub fn read_node(dir: &Path, node: &str, bit: u8) -> Result<NodeLog, LogError> {
     }
     log.present = true;
     let mut open: Option<Gap> = None;
-    for seg in list_segments(dir)? {
+    let segments = list_segments(dir)?;
+    for (i, seg) in segments.iter().enumerate() {
         log.segments += 1;
-        for r in read_segment(&seg.path)? {
+        let buf = segment_bytes(&seg.path)?;
+        let s = scan(&buf);
+        if let Some(reason) = s.tail {
+            if i + 1 < segments.len() || !is_torn(reason) {
+                return Err(LogError::Corrupt {
+                    path: seg.path.clone(),
+                    offset: s.valid_len as u64,
+                    reason,
+                });
+            }
+            log.torn_bytes += (buf.len() - s.valid_len) as u64;
+        }
+        for r in s.records {
             match r.kind {
-                RecordKind::RawFrame => log.frames.push((r.recv_ns, r.payload)),
+                RecordKind::RawFrame => {
+                    if open.is_some() && gp_feed::carries_data(&r.payload) {
+                        let mut g = open.take().expect("open");
+                        g.end_ns = Some(r.recv_ns);
+                        log.gaps.push(g);
+                    }
+                    log.frames.push((r.recv_ns, r.payload));
+                }
                 RecordKind::GapStart => {
                     if open.is_none() {
                         open = Some(Gap {
@@ -135,6 +161,48 @@ mod tests {
             ]
         );
         assert_eq!((log.subscribes, log.token_reloads), (1, 1));
+    }
+
+    #[test]
+    fn restart_closes_an_open_gap_and_a_torn_tail_is_kept() {
+        use gp_feed::synth::{Market, MarketConfig, universe};
+        use prost::Message;
+        let date = gp_feed::Date::from_ymd(2026, 10, 19);
+        let mut m = Market::new(
+            MarketConfig::new(date),
+            universe(date, 25_000.0, 1, 2.0, 50.0),
+        );
+        let data = m.next_frame().encode_to_vec();
+        let dir = tempfile::tempdir().unwrap();
+        let (mut w, _) = Writer::open(dir.path(), WriterConfig::default()).unwrap();
+        w.append(RecordKind::GapStart, 0, 20, 0, b"closed: eof")
+            .unwrap();
+        w.close().unwrap();
+        // the restarted capture writes no GAP_END: its first data frame ends the gap
+        let (mut w, _) = Writer::open(dir.path(), WriterConfig::default()).unwrap();
+        w.append(RecordKind::RawFrame, 0, 90, 0, b"f").unwrap();
+        w.append(RecordKind::RawFrame, 0, 100, 0, &data).unwrap();
+        w.close().unwrap();
+        let last = gp_log::list_segments(dir.path())
+            .unwrap()
+            .pop()
+            .unwrap()
+            .path;
+        let mut bytes = std::fs::read(&last).unwrap();
+        bytes.extend_from_slice(&[0x31, 0x4C, 0x50, 0x47, 9, 9, 9]);
+        std::fs::write(&last, bytes).unwrap();
+
+        let log = read_node(dir.path(), "A", 1).unwrap();
+        assert_eq!(log.frames.len(), 2);
+        assert_eq!(log.torn_bytes, 7);
+        assert_eq!(
+            log.gaps,
+            [Gap {
+                start_ns: 20,
+                end_ns: Some(100),
+                reason: "closed: eof".into()
+            }]
+        );
     }
 
     #[test]

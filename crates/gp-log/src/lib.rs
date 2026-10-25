@@ -23,8 +23,8 @@ pub mod writer;
 
 pub use record::{Invalid, MAX_PAYLOAD, Record, RecordKind, decode};
 pub use segment::{
-    Recovery, Scan, SegmentFile, ZSTD_LEVEL, compress_segment, list_segments, read_segment,
-    recover_segment, scan, segment_bytes, segment_file_name,
+    Recovery, Scan, SegmentFile, ZSTD_LEVEL, compress_segment, is_torn, list_segments,
+    read_segment, recover_segment, scan, segment_bytes, segment_file_name,
 };
 
 pub use tail::{Tail, read_log};

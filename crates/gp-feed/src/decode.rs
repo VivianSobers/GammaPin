@@ -2,7 +2,7 @@
 
 use prost::Message;
 
-use crate::proto::{FeedResponse, feed::FeedUnion, full_feed::FullFeedUnion};
+use crate::proto::{FeedResponse, Type, feed::FeedUnion, full_feed::FullFeedUnion};
 
 /// Market depth levels kept per side (Upstox `full_d5`).
 pub const DEPTH: usize = 5;
@@ -27,6 +27,12 @@ pub struct Update {
 
 pub fn decode_frame(bytes: &[u8]) -> Result<FeedResponse, prost::DecodeError> {
     FeedResponse::decode(bytes)
+}
+
+/// Whether a frame carries market data. The `market_info` greeting does not: it arrives
+/// before the subscription takes effect, so it cannot close a gap.
+pub fn carries_data(payload: &[u8]) -> bool {
+    decode_frame(payload).is_ok_and(|f| f.r#type != Type::MarketInfo as i32)
 }
 
 fn blank(instrument_key: &str) -> Update {

@@ -9,7 +9,7 @@ pub mod subscribe;
 pub mod synth;
 
 pub use date::Date;
-pub use decode::{DEPTH, Update, decode_frame, updates};
+pub use decode::{DEPTH, Update, carries_data, decode_frame, updates};
 pub use event::{Event, NODE_A, NODE_B, Normalizer};
 pub use instruments::{Instrument, Kind, Master, NIFTY_INDEX_KEY, parse_master, read_master};
 pub use select::{Selection, select};

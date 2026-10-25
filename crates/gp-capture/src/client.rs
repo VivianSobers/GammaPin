@@ -3,7 +3,7 @@
 use std::time::Duration;
 
 use futures_util::{SinkExt, StreamExt};
-use gp_feed::proto::Type;
+use gp_feed::carries_data;
 use gp_log::LogError;
 use tokio::sync::watch;
 use tokio_tungstenite::tungstenite::Message;
@@ -57,19 +57,13 @@ pub async fn stopped(stop: &mut watch::Receiver<bool>) {
     let _ = stop.wait_for(|s| *s).await;
 }
 
-/// Whether a frame carries market data. The `market_info` greeting does not: it arrives
-/// before the subscription takes effect, so it cannot close a gap.
-pub(crate) fn carries_data(payload: &[u8]) -> bool {
-    gp_feed::decode_frame(payload).is_ok_and(|f| f.r#type != Type::MarketInfo as i32)
-}
-
 /// How a connection went.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Outcome {
     pub end: End,
     /// Frames written on this connection, the `market_info` greeting included.
     pub frames: u64,
-    /// Of those, frames that carry market data ([`carries_data`]).
+    /// Of those, frames that carry market data ([`gp_feed::carries_data`]).
     pub data_frames: u64,
 }
 
@@ -259,7 +253,7 @@ mod tests {
 
     #[test]
     fn only_data_frames_close_a_gap() {
-        use gp_feed::proto::FeedResponse;
+        use gp_feed::proto::{FeedResponse, Type};
         use prost::Message as _;
         let info = FeedResponse {
             r#type: Type::MarketInfo as i32,

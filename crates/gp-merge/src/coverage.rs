@@ -1,7 +1,9 @@
 //! The per-node coverage report written next to each merged day.
 //!
 //! A gap on one node costs nothing while the other node is up; data is lost only where
-//! both nodes are in a gap at once. Those windows are listed as `lost`.
+//! every node is uncovered at once. A node is uncovered inside its gaps, before its first
+//! frame and after its last (a late start or a crash leaves no gap record). Those windows,
+//! within the trading session and the span any node recorded, are listed as `lost`.
 
 use std::fmt::Write;
 
@@ -35,6 +37,8 @@ pub struct NodeReport {
     pub longest_silence_ms: f64,
     pub subscribes: usize,
     pub token_reloads: usize,
+    /// Bytes of a torn tail dropped from the last segment.
+    pub torn_bytes: u64,
     pub decode: DecodeStats,
 }
 
@@ -45,7 +49,7 @@ pub struct Coverage {
     pub dedup: DedupStats,
     pub partitions: PartitionStats,
     pub replay_events: u64,
-    /// Windows (ns) where every present node was in a gap: data that no node captured.
+    /// Windows (ns) where every present node was uncovered: data that no node captured.
     pub lost: Vec<(i64, i64)>,
 }
 
@@ -79,26 +83,58 @@ pub fn node_report(log: &NodeLog, decode: DecodeStats) -> NodeReport {
         longest_silence_ms: log.longest_silence_ns() as f64 / 1e6,
         subscribes: log.subscribes,
         token_reloads: log.token_reloads,
+        torn_bytes: log.torn_bytes,
         decode,
     }
 }
 
-/// Intersection of all present nodes' gap windows. Gaps still open at a node's end run to
-/// `i64::MAX`, because nothing more arrived from it.
-pub fn lost_windows(nodes: &[NodeReport]) -> Vec<(i64, i64)> {
+/// The NSE cash session, minutes after IST midnight.
+pub const SESSION_MINUTES: (f64, f64) = (555.0, 930.0);
+
+/// The session of `date` as Unix ns.
+pub fn session_ns(date: gp_feed::Date) -> (i64, i64) {
+    let at = |m: f64| date.ist_unix_ms(m) * 1_000_000;
+    (at(SESSION_MINUTES.0), at(SESSION_MINUTES.1))
+}
+
+/// Windows where every present node was uncovered, clipped to `session` and to the span
+/// between the earliest and the latest frame of any node.
+pub fn lost_windows(nodes: &[NodeReport], session: (i64, i64)) -> Vec<(i64, i64)> {
     let present: Vec<&NodeReport> = nodes.iter().filter(|n| n.present).collect();
-    let Some((first, rest)) = present.split_first() else {
+    let first = present.iter().filter_map(|n| n.first_recv_ns).min();
+    let last = present.iter().filter_map(|n| n.last_recv_ns).max();
+    let (Some(first), Some(last)) = (first, last) else {
         return Vec::new();
     };
-    let windows = |n: &NodeReport| -> Vec<(i64, i64)> {
-        n.gaps
+    let (lo, hi) = (session.0.max(first), session.1.min(last));
+    if lo >= hi {
+        return Vec::new();
+    }
+    let uncovered = |n: &NodeReport| -> Vec<(i64, i64)> {
+        let (Some(f), Some(l)) = (n.first_recv_ns, n.last_recv_ns) else {
+            return vec![(lo, hi)];
+        };
+        let mut w: Vec<(i64, i64)> = n
+            .gaps
             .iter()
-            .map(|g| (g.start_ns, if g.open_at_end { i64::MAX } else { g.end_ns }))
-            .collect()
+            .map(|g| (g.start_ns, if g.open_at_end { hi } else { g.end_ns }))
+            .chain([(lo, f), (l, hi)])
+            .map(|(s, e)| (s.max(lo), e.min(hi)))
+            .filter(|(s, e)| s < e)
+            .collect();
+        w.sort_unstable();
+        let mut merged: Vec<(i64, i64)> = Vec::new();
+        for (s, e) in w {
+            match merged.last_mut() {
+                Some(m) if s <= m.1 => m.1 = m.1.max(e),
+                _ => merged.push((s, e)),
+            }
+        }
+        merged
     };
-    let mut acc = windows(first);
-    for n in rest {
-        let other = windows(n);
+    let mut acc = vec![(lo, hi)];
+    for n in present {
+        let other = uncovered(n);
         let mut next = Vec::new();
         for &(a0, a1) in &acc {
             for &(b0, b1) in &other {
@@ -157,16 +193,11 @@ impl Coverage {
         )
         .unwrap();
         if self.lost.is_empty() {
-            s += "\nNo window with every node in a gap: nothing was lost.\n";
+            s += "\nNo window with every node uncovered: nothing was lost.\n";
         } else {
-            s += "\n**Lost windows (every node in a gap), IST:**\n\n";
+            s += "\n**Lost windows (every node uncovered), IST:**\n\n";
             for (a, b) in &self.lost {
-                let end = if *b == i64::MAX {
-                    "end of day".into()
-                } else {
-                    ms(*b)
-                };
-                writeln!(s, "- {} – {}", ms(*a), end).unwrap();
+                writeln!(s, "- {} – {}", ms(*a), ms(*b)).unwrap();
             }
         }
         for n in self.nodes.iter().filter(|n| !n.gaps.is_empty()) {
@@ -204,6 +235,8 @@ mod tests {
         node_report(&log, DecodeStats::default())
     }
 
+    const ALL: (i64, i64) = (i64::MIN, i64::MAX);
+
     fn gap(s: i64, e: Option<i64>) -> Gap {
         Gap {
             start_ns: s,
@@ -214,11 +247,11 @@ mod tests {
 
     #[test]
     fn single_node_gaps_lose_nothing() {
-        let a = node("A", vec![gap(100, Some(200))], vec![50, 250]);
+        let a = node("A", vec![gap(100, Some(200))], vec![50, 450]);
         let b = node("B", vec![gap(300, Some(400))], vec![50, 450]);
-        assert!(lost_windows(&[a.clone(), b]).is_empty());
+        assert!(lost_windows(&[a.clone(), b], ALL).is_empty());
         assert_eq!(a.gap_ms, 100.0 / 1e6);
-        assert_eq!(a.longest_silence_ms, 200.0 / 1e6);
+        assert_eq!(a.longest_silence_ms, 400.0 / 1e6);
     }
 
     #[test]
@@ -233,12 +266,24 @@ mod tests {
             vec![gap(250, Some(500)), gap(1_000, None)],
             vec![50, 990],
         );
-        assert_eq!(
-            lost_windows(&[a.clone(), b]),
-            [(250, 300), (1_000, i64::MAX)]
-        );
+        // A's open gap runs to the latest frame of any node (B's, at 990)
+        assert_eq!(lost_windows(&[a.clone(), b], ALL), [(250, 300)]);
         assert!(a.gaps[1].open_at_end);
         assert_eq!(a.gaps[1].end_ns, 950);
+    }
+
+    #[test]
+    fn downtime_without_a_gap_record_is_uncovered() {
+        // B starts late and stops early with no gap records; A has a gap near the start
+        let a = node("A", vec![gap(100, Some(300))], vec![50, 1_000]);
+        let b = node("B", vec![], vec![200, 600]);
+        assert_eq!(lost_windows(&[a.clone(), b], ALL), [(100, 200)]);
+        // a present node with no frames covers nothing
+        let empty = node("B", vec![], vec![]);
+        assert_eq!(lost_windows(&[a.clone(), empty], ALL), [(100, 300)]);
+        // clipped to the session
+        let b = node("B", vec![], vec![50, 60]);
+        assert_eq!(lost_windows(&[a, b], (0, 200)), [(100, 200)]);
     }
 
     #[test]
@@ -246,7 +291,7 @@ mod tests {
         let a = node("A", vec![gap(100, Some(300))], vec![50, 400]);
         let mut b = node("B", vec![], vec![]);
         b.present = false;
-        let lost = lost_windows(&[a.clone(), b.clone()]);
+        let lost = lost_windows(&[a.clone(), b.clone()], ALL);
         assert_eq!(lost, [(100, 300)]);
         let c = Coverage {
             date: "2026-10-19".into(),
