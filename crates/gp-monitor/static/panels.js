@@ -67,7 +67,6 @@
   function fmtTradingMinutes(tYears) {
     var m = tradingMinutes(tYears);
     if (m === null) return DASH;
-    if (m < 0) return '0 min';
     if (m < 1) return '<1 min';
     var s = fmtNum(m, 0) + ' min';
     if (m > MINUTES_PER_SESSION) s += ' (' + fmtNum(m / MINUTES_PER_SESSION, 1) + ' sessions)';
@@ -625,7 +624,6 @@
       renderTable(vm);
       renderHealth(vm);
       chart.update(vm.chart);
-      doc.body.classList.remove('no-data');
       tick();
     }
 
@@ -667,25 +665,10 @@
       if (last.snap) render(last.snap, last.meta);
     }
 
-    return { render: render, renderStatus: renderStatus, tick: tick, retheme: retheme, chart: chart };
+    return { render: render, renderStatus: renderStatus, tick: tick, retheme: retheme };
   }
 
   return {
-    STALE_MS: STALE_MS,
-    fmtNum: fmtNum,
-    fmtSigned: fmtSigned,
-    fmtLevel: fmtLevel,
-    fmtCrore: fmtCrore,
-    toCrore: toCrore,
-    tradingMinutes: tradingMinutes,
-    fmtTradingMinutes: fmtTradingMinutes,
-    fmtAccuracy: fmtAccuracy,
-    regimeInfo: regimeInfo,
-    fmtAge: fmtAge,
-    fmtTimeIST: fmtTimeIST,
-    fmtExpiry: fmtExpiry,
-    conventionKeys: conventionKeys,
-    buildChartModel: buildChartModel,
     buildViewModel: buildViewModel,
     createDashboard: createDashboard
   };

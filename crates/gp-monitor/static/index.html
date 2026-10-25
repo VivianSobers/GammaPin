@@ -12,7 +12,7 @@
     try { var t = localStorage.getItem('gp-theme'); if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t); } catch (e) {}
   </script>
 </head>
-<body class="no-data">
+<body>
   <!-- Always visible, independent of payload and connection state (C2). Not touched by any script. -->
   <div id="banner" role="note">Analytics, not trading advice.</div>
 
@@ -55,7 +55,7 @@
       </dl>
     </section>
 
-    <section class="card chart-card" aria-labelledby="gex-title">
+    <section class="card" aria-labelledby="gex-title">
       <div class="card-head">
         <h2 id="gex-title">GEX by strike</h2>
         <span class="muted small">&#8377; crore per 1% move, by sign convention</span>

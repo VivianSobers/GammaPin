@@ -1,4 +1,4 @@
-//! V6.4 and V6.1 on the mock feed: two capture nodes write their logs, the monitor follows
+//! V6.1 and the live half of V6.4 on the mock feed: two capture nodes write their logs, the monitor follows
 //! them live and serves `/ws`, and a client plays the dashboard. The mock's exchange clock
 //! runs on wall time, so latencies are real.
 

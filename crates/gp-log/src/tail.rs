@@ -32,6 +32,8 @@ pub struct Tail {
     deferred: Option<LogError>,
     /// The current segment is compressed and already read in full.
     drained: bool,
+    /// Stop a poll at the end of the segment that brings it to this many records.
+    budget: usize,
 }
 
 impl Tail {
@@ -44,7 +46,16 @@ impl Tail {
             pending: Vec::new(),
             deferred: None,
             drained: false,
+            budget: usize::MAX,
         }
+    }
+
+    /// Return from a poll once it has `records` records and a segment ends, so a reader
+    /// that starts behind a day's backlog catches up a segment at a time instead of
+    /// loading it all at once.
+    pub fn with_budget(mut self, records: usize) -> Self {
+        self.budget = records.max(1);
+        self
     }
 
     /// Start at segment `index`, waiting for it if it does not exist yet. Used to move past
@@ -163,6 +174,9 @@ impl Tail {
                 r => r?,
             }
             self.take_records(&seg.path, out)?;
+            if out.len() >= self.budget {
+                return Ok(()); // the next poll moves on from here
+            }
             match segments.get(pos + 1) {
                 // The writer only starts a new segment after the old one is complete,
                 // so anything left over here is a torn tail that will never be finished.
@@ -241,6 +255,26 @@ mod tests {
         seen.extend(tail.poll().unwrap().into_iter().map(|r| r.recv_ns));
         assert_eq!(seen, (0..12).collect::<Vec<_>>());
         assert!(tail.segment_index().unwrap() > 0);
+    }
+
+    #[test]
+    fn budget_stops_at_a_segment_end() {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut w, _) = Writer::open(dir.path(), cfg(200)).unwrap();
+        for i in 0..12 {
+            put(&mut w, i, 40);
+        }
+        w.close().unwrap();
+        let mut tail = Tail::new(dir.path()).with_budget(1);
+        let first = tail.poll().unwrap().len();
+        assert!(first > 0 && first < 12);
+        let mut n = first;
+        while n < 12 {
+            let got = tail.poll().unwrap().len();
+            assert!(got > 0);
+            n += got;
+        }
+        assert_eq!(n, 12);
     }
 
     #[test]

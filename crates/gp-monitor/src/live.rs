@@ -12,6 +12,10 @@ use gp_feed::{Event, Master, Normalizer, decode_frame, updates};
 use gp_log::{LogError, RecordKind, Tail};
 use gp_replay::{EventStream, Poll, Source, StreamError};
 
+/// Records taken from one node per poll, at segment granularity: a monitor restarted in
+/// the middle of the day works through the backlog in steps, both nodes in turn.
+const POLL_BUDGET: usize = 20_000;
+
 struct Node {
     dir: PathBuf,
     bit: u8,
@@ -46,7 +50,7 @@ impl LiveStream {
             .into_iter()
             .enumerate()
             .map(|(bit, dir)| Node {
-                tail: Tail::new(&dir),
+                tail: Tail::new(&dir).with_budget(POLL_BUDGET),
                 dir,
                 bit: bit as u8,
             })
@@ -77,7 +81,7 @@ impl LiveStream {
                     // Damage the writer can't have caused by stopping: give up on the segment.
                     let next = node.tail.segment_index().map_or(0, |i| i + 1);
                     tracing::warn!("skipping corrupt segment {}", path.display());
-                    node.tail = Tail::starting_at(&node.dir, next);
+                    node.tail = Tail::starting_at(&node.dir, next).with_budget(POLL_BUDGET);
                     self.stats.skipped_segments += 1;
                     continue;
                 }
@@ -109,6 +113,12 @@ impl LiveStream {
             }
         }
         Ok(())
+    }
+}
+
+impl Drop for LiveStream {
+    fn drop(&mut self) {
+        tracing::info!("live stream: {:?}", self.stats);
     }
 }
 

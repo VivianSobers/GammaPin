@@ -1,5 +1,6 @@
-//! The monitor's HTTP side: `/ws` pushes each new C2 snapshot, `/snapshot.json` returns the
-//! latest one, and everything else is served from `static/`.
+//! The monitor's HTTP side: `/ws` pushes each new C2 snapshot, and everything else is
+//! served from `static/`. `/snapshot.json` returns the latest snapshot for debugging (curl,
+//! scripts); the dashboard does not use it.
 
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;

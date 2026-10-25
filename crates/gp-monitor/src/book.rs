@@ -16,10 +16,35 @@ struct Leg {
     ltt_ms: i64,
 }
 
+/// Legs remembered per side, so a node's late copy of an update cannot roll the book back.
+const RECENT: usize = 8;
+
+/// One side of a strike: the current leg and the last few legs taken.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+struct Side {
+    leg: Option<Leg>,
+    recent: [Option<Leg>; RECENT],
+    at: usize,
+}
+
+impl Side {
+    /// Take `leg` unless it is older than the current one or one already taken: the other
+    /// node's copy of an update arrives after the first copy and maybe after newer ones.
+    fn take(&mut self, leg: Leg) -> bool {
+        if self.leg.is_some_and(|l| l.ltt_ms > leg.ltt_ms) || self.recent.contains(&Some(leg)) {
+            return false;
+        }
+        self.leg = Some(leg);
+        self.recent[self.at] = Some(leg);
+        self.at = (self.at + 1) % RECENT;
+        true
+    }
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 struct Pair {
-    call: Option<Leg>,
-    put: Option<Leg>,
+    call: Side,
+    put: Side,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -68,20 +93,15 @@ impl Book {
                 let chain = self.chains.entry(expiry).or_default();
                 chain.lot_size = e.lot_size;
                 let pair = chain.strikes.entry(strike_key(strike)).or_default();
-                let slot = if e.kind == Kind::Ce {
+                let side = if e.kind == Kind::Ce {
                     &mut pair.call
                 } else {
                     &mut pair.put
                 };
-                let leg = Leg {
+                side.take(Leg {
                     quote: quote(e),
                     ltt_ms: e.ltt_ms,
-                };
-                if slot.is_some_and(|l| l.ltt_ms > e.ltt_ms || l == leg) {
-                    return false;
-                }
-                *slot = Some(leg);
-                true
+                })
             }
         }
     }
@@ -89,10 +109,6 @@ impl Book {
     /// Index LTP and its exchange time.
     pub fn spot(&self) -> Option<(f64, i64)> {
         self.spot
-    }
-
-    pub fn expiries(&self) -> impl Iterator<Item = Date> + '_ {
-        self.chains.keys().copied()
     }
 
     /// The nearest expiry on or after `today`.
@@ -115,8 +131,8 @@ impl Book {
             .iter()
             .map(|(&k, p)| StrikeRow {
                 strike: k as f64 / 100.0,
-                call: p.call.map(|l| l.quote).unwrap_or_default(),
-                put: p.put.map(|l| l.quote).unwrap_or_default(),
+                call: p.call.leg.map(|l| l.quote).unwrap_or_default(),
+                put: p.put.leg.map(|l| l.quote).unwrap_or_default(),
             })
             .collect()
     }
@@ -190,6 +206,17 @@ pub(crate) mod tests {
         assert_eq!(rows[1].call.bid, 42.0);
         assert_eq!(rows[1].call.oi, 1_000.0);
         assert_eq!(b.lot_size(d), Some(75));
+    }
+
+    #[test]
+    fn a_late_copy_does_not_roll_back() {
+        let mut b = Book::new();
+        // node A: two quotes in the same millisecond; node B's copy of the first comes last
+        assert!(b.apply(&ev(Kind::Ce, 25_000.0, 10, 40.0, 41.0)));
+        assert!(b.apply(&ev(Kind::Ce, 25_000.0, 10, 40.5, 41.5)));
+        assert!(!b.apply(&ev(Kind::Ce, 25_000.0, 10, 40.0, 41.0)));
+        let d = Date::from_ymd(2026, 10, 20);
+        assert_eq!(b.rows(d)[0].call.bid, 40.5);
     }
 
     #[test]

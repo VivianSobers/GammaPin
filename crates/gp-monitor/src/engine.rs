@@ -3,7 +3,7 @@
 //! Live and replay feed it the same way; only the snapshot clock differs (wall time live,
 //! the stream's exchange time in replay).
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 use gp_feed::date::ist_minute_of_day;
 use gp_feed::{Date, Event};
@@ -83,7 +83,8 @@ pub struct Engine {
     lags: LagWindow,
     nodes: Nodes,
     gaps: Gaps,
-    events: u64,
+    /// Last `ltt_ms` seen per contract, so only new trades give lag samples.
+    last_trade: HashMap<String, i64>,
 }
 
 impl Engine {
@@ -95,14 +96,23 @@ impl Engine {
             pending: Vec::new(),
             lags: LagWindow::default(),
             gaps: Gaps::default(),
-            events: 0,
+            last_trade: HashMap::new(),
         }
     }
 
     pub fn on_event(&mut self, e: &Event) {
-        self.events += 1;
         self.nodes.seen(e.src_mask, e.recv_ns.div_euclid(1_000_000));
-        if e.underlying == self.cfg.underlying && self.book.apply(e) {
+        if e.underlying != self.cfg.underlying || !self.book.apply(e) {
+            return;
+        }
+        // A quote change on an old trade says nothing about feed delay: `ltt_ms` is the
+        // last trade's time, so only an update that brings a new trade is a lag sample.
+        let last = self
+            .last_trade
+            .entry(e.instrument_key.clone())
+            .or_insert(i64::MIN);
+        if e.ltt_ms > *last {
+            *last = e.ltt_ms;
             self.pending.push(e.ltt_ms);
         }
     }
@@ -112,16 +122,12 @@ impl Engine {
         self.gaps.add(start_ms);
     }
 
-    pub fn events(&self) -> u64 {
-        self.events
-    }
-
     pub fn book(&self) -> &Book {
         &self.book
     }
 
-    /// The C2 snapshot as of `ts_ms`. Lag samples for the updates taken since the last
-    /// snapshot are counted even when this fails.
+    /// The C2 snapshot as of `ts_ms`. Lag samples (exchange trade time to this snapshot)
+    /// for the new trades taken since the last snapshot are counted even when this fails.
     pub fn snapshot(&mut self, ts_ms: i64, source: &str) -> Result<Snapshot, SnapshotError> {
         for ltt in self.pending.drain(..) {
             self.lags.record(ts_ms, (ts_ms - ltt) as f64);
@@ -145,7 +151,7 @@ impl Engine {
                 rows: &rows,
                 r: self.cfg.r,
                 t_years: t,
-                lot_size: f64::from(self.book.lot_size(expiry).unwrap_or(0)),
+                lot_size: f64::from(self.book.lot_size(expiry).expect("expiry is in the book")),
                 filter: FilterConfig::LIVE,
             },
             &weights,
@@ -265,7 +271,6 @@ pub(crate) mod tests {
         // a second snapshot with nothing new keeps the lag window
         let again = eng.snapshot(ts + 1_000, "replay").unwrap();
         assert_eq!(again.health.lag_ms_p99, s.health.lag_ms_p99);
-        assert_eq!(eng.events(), evs.len() as u64);
     }
 
     /// The dashboard's own validator (`static/feed.js`) accepts what the engine produces.

@@ -283,11 +283,6 @@
   return {
     SCHEMA_VERSION: SCHEMA_VERSION,
     validateSnapshot: validateSnapshot,
-    parseMessage: parseMessage,
-    backoffDelay: backoffDelay,
-    wsUrl: wsUrl,
-    isMockRequested: isMockRequested,
-    jitterSnapshot: jitterSnapshot,
     start: start
   };
 });

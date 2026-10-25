@@ -68,7 +68,7 @@ Each `conventions.<S>` object:
 
 | Field | Type | Notes |
 |---|---|---|
-| `lag_ms_p50` | number | Exchange `ltt_ms` to snapshot, last 60 s |
+| `lag_ms_p50` | number | Exchange `ltt_ms` of each new trade to the first snapshot that includes it, last 60 s |
 | `lag_ms_p99` | number | |
 | `gaps_today` | int | `GAP_START` records today across nodes |
 | `nodes` | object | `{ "A": "up" \| "down", "B": ... }` |
