@@ -26,7 +26,7 @@ settlement than the best simple baseline. Under the US sign convention it is sig
 ---
 
 ## Contents
-
+ 
 | Section | |
 |---|---|
 | [What it does](#what-it-does) | The research and the systems, by area |
